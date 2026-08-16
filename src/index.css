@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+}
+
+/* faint chalk-dust grain across the board — cheap, no image asset needed */
+.chalk-grain {
+  background-image:
+    radial-gradient(rgba(242, 237, 225, 0.04) 1px, transparent 1px),
+    radial-gradient(rgba(242, 237, 225, 0.03) 1px, transparent 1px);
+  background-size: 26px 26px, 34px 34px;
+  background-position: 0 0, 12px 18px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

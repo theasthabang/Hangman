@@ -1,0 +1,6 @@
+{
+  "Everyday": ["about", "family", "friend", "morning", "kitchen", "weather", "holiday", "journey"],
+  "Animals": ["elephant", "giraffe", "penguin", "dolphin", "hedgehog", "octopus", "kangaroo", "flamingo"],
+  "Tech": ["keyboard", "software", "internet", "algorithm", "database", "wireless", "processor", "compiler"],
+  "Movies": ["director", "sequel", "trailer", "premiere", "animation", "subtitle", "screenplay", "blockbuster"]
+}
