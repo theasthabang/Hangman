@@ -16,6 +16,9 @@ load_dotenv()
 
 app = Flask(__name__)
 
+# Vite normally proxies requests to Flask in dev. In production, the
+# frontend lives on a different domain, so CORS must explicitly allow it.
+# Set FRONTEND_URL in your hosting dashboard once the frontend is deployed.
 # Vite proxies requests to Flask in dev. In production, the frontend
 # lives on a different domain, so CORS must explicitly allow it via
 # FRONTEND_URL, set in Render's Environment tab.
@@ -23,7 +26,10 @@ FRONTEND_URL = os.getenv("FRONTEND_URL")
 
 _allowed_origins: list = [re.compile(r"^http://localhost:\d+$")]
 if FRONTEND_URL:
-    _allowed_origins.append(FRONTEND_URL)
+    # Compile as a regex too (not a raw string) so every item in this
+    # list is the same type — avoids any ambiguity in how flask-cors
+    # matches mixed string/regex origins.
+    _allowed_origins.append(re.compile(f"^{re.escape(FRONTEND_URL.strip())}$"))
 
 CORS(
     app,
@@ -117,16 +123,10 @@ DIFFICULTY_GUIDANCE: dict[str, str] = {
 # ============================================================
 
 def normalize_word(value: str) -> str:
-    """
-    Normalize a generated word into the format expected by the game.
-    """
     return value.strip().upper()
 
 
 def normalize_excluded_words(values: Any) -> list[str]:
-    """
-    Safely normalize the list of recently used words.
-    """
     if not isinstance(values, list):
         return []
 
@@ -148,9 +148,6 @@ def normalize_excluded_words(values: Any) -> list[str]:
 
 
 def normalize_category(value: Any) -> str:
-    """
-    Normalize and sanitize the requested category.
-    """
     if not isinstance(value, str):
         return "random"
 
@@ -166,9 +163,6 @@ def normalize_category(value: Any) -> str:
 
 
 def normalize_difficulty(value: Any) -> str:
-    """
-    Only allow supported difficulty levels.
-    """
     if isinstance(value, str) and value.lower() in DIFFICULTY_RULES:
         return value.lower()
 
@@ -184,10 +178,6 @@ def build_prompt(
     category: str,
     excluded_words: list[str],
 ) -> str:
-    """
-    Build a strict prompt for generating one Hangman vocabulary challenge.
-    """
-
     min_length, max_length = DIFFICULTY_RULES[difficulty]
 
     excluded_text = (
@@ -376,11 +366,7 @@ Generate the best possible Hangman vocabulary challenge now.
 # AI Request
 # ============================================================
 
-def call_groq(prompt: str) -> dict[str, Any]:
-    """
-    Send the prompt to Groq and return the parsed JSON response.
-    """
-
+def call_groq(prompt: str) -> dict:
     if not GROQ_API_KEY:
         raise RuntimeError("GROQ_API_KEY is not configured.")
 
@@ -437,7 +423,6 @@ def call_groq(prompt: str) -> dict[str, Any]:
 
     content = content.strip()
 
-    # Defensive cleanup in case the provider still returns code fences.
     content = re.sub(
         r"^```(?:json)?\s*",
         "",
@@ -468,13 +453,7 @@ def validate_generated_word(
     requested_difficulty: str,
     requested_category: str,
     excluded_words: list[str],
-) -> dict[str, str] | None:
-    """
-    Validate and sanitize the AI-generated challenge.
-
-    The backend remains the final authority.
-    """
-
+) -> dict | None:
     if not isinstance(raw, dict):
         return None
 
@@ -483,116 +462,59 @@ def validate_generated_word(
     category = raw.get("category")
     difficulty = raw.get("difficulty")
 
-    # --------------------------------------------------------
-    # Basic type validation
-    # --------------------------------------------------------
-
     if not isinstance(word, str):
         return None
-
     if not isinstance(hint, str):
         return None
-
     if not isinstance(category, str):
         return None
-
     if not isinstance(difficulty, str):
         return None
 
-    # --------------------------------------------------------
-    # Empty value validation
-    # --------------------------------------------------------
-
     if not word.strip():
         return None
-
     if not hint.strip():
         return None
-
     if not category.strip():
         return None
 
-    # --------------------------------------------------------
-    # Normalize
-    # --------------------------------------------------------
-
     normalized_word = normalize_word(word)
-
     normalized_difficulty = difficulty.strip().lower()
-
-    # --------------------------------------------------------
-    # Difficulty validation
-    # --------------------------------------------------------
 
     if normalized_difficulty != requested_difficulty:
         return None
 
-    # --------------------------------------------------------
-    # Word format validation
-    # --------------------------------------------------------
-
     if not re.fullmatch(r"[A-Z]+", normalized_word):
         return None
 
-    # --------------------------------------------------------
-    # Word length validation
-    # --------------------------------------------------------
-
     min_length, max_length = DIFFICULTY_RULES[requested_difficulty]
 
-    if not (
-        min_length
-        <= len(normalized_word)
-        <= max_length
-    ):
+    if not (min_length <= len(normalized_word) <= max_length):
         return None
 
-    # --------------------------------------------------------
-    # Duplicate validation
-    # --------------------------------------------------------
-
-    normalized_excluded = {
-        normalize_word(value)
-        for value in excluded_words
-    }
+    normalized_excluded = {normalize_word(value) for value in excluded_words}
 
     if normalized_word in normalized_excluded:
         return None
-
-    # --------------------------------------------------------
-    # Category validation
-    # --------------------------------------------------------
 
     clean_category = category.strip()
 
     if len(clean_category) > 50:
         return None
 
-    # If a specific category was requested, reject obviously
-    # missing/empty category information.
     if requested_category != "random":
         if not clean_category:
             return None
-
-    # --------------------------------------------------------
-    # Hint validation
-    # --------------------------------------------------------
 
     clean_hint = re.sub(r"\s+", " ", hint.strip())
 
     if len(clean_hint) < 5:
         return None
-
     if len(clean_hint) > 200:
         return None
 
-    # Avoid returning the exact answer inside the clue.
     if normalized_word.lower() in clean_hint.lower():
         return None
-
-    # --------------------------------------------------------
-    # Final sanitized result
-    # --------------------------------------------------------
 
     return {
         "word": normalized_word,
@@ -606,19 +528,8 @@ def validate_generated_word(
 # API Error Helper
 # ============================================================
 
-def api_error(
-    message: str,
-    status_code: int,
-):
-    """
-    Return a consistent public-facing API error.
-
-    Internal errors are never exposed to the frontend.
-    """
-
-    return jsonify({
-        "error": message
-    }), status_code
+def api_error(message: str, status_code: int):
+    return jsonify({"error": message}), status_code
 
 
 # ============================================================
@@ -627,66 +538,23 @@ def api_error(
 
 @app.route("/api/generate-word", methods=["POST"])
 def generate_word():
-    """
-    Generate one validated Hangman vocabulary challenge.
-    """
-
-    # --------------------------------------------------------
-    # API key check
-    # --------------------------------------------------------
-
     if not GROQ_API_KEY:
-        return api_error(
-            "Unable to generate a word. Please try again.",
-            500,
-        )
-
-    # --------------------------------------------------------
-    # Request body
-    # --------------------------------------------------------
+        return api_error("Unable to generate a word. Please try again.", 500)
 
     body = request.get_json(silent=True)
 
     if not isinstance(body, dict):
         body = {}
 
-    # --------------------------------------------------------
-    # Difficulty
-    # --------------------------------------------------------
-
-    difficulty = normalize_difficulty(
-        body.get("difficulty")
-    )
-
-    # --------------------------------------------------------
-    # Category
-    # --------------------------------------------------------
-
-    category = normalize_category(
-        body.get("category")
-    )
-
-    # --------------------------------------------------------
-    # Recently used words
-    # --------------------------------------------------------
-
-    excluded_words = normalize_excluded_words(
-        body.get("exclude")
-    )
-
-    # --------------------------------------------------------
-    # Build initial prompt
-    # --------------------------------------------------------
+    difficulty = normalize_difficulty(body.get("difficulty"))
+    category = normalize_category(body.get("category"))
+    excluded_words = normalize_excluded_words(body.get("exclude"))
 
     prompt = build_prompt(
         difficulty=difficulty,
         category=category,
         excluded_words=excluded_words,
     )
-
-    # --------------------------------------------------------
-    # Retry AI generation
-    # --------------------------------------------------------
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -702,8 +570,6 @@ def generate_word():
             if validated is not None:
                 return jsonify(validated), 200
 
-            # If the model returned invalid data, ask for a fresh
-            # generation on the next attempt.
             prompt = build_prompt(
                 difficulty=difficulty,
                 category=category,
@@ -717,21 +583,12 @@ def generate_word():
             KeyError,
             TypeError,
         ):
-            # Never expose provider errors or internal details.
             continue
 
         except Exception:
-            # Final safety net. Never leak internal server details.
             continue
 
-    # --------------------------------------------------------
-    # All retries failed
-    # --------------------------------------------------------
-
-    return api_error(
-        "Unable to generate a word. Please try again.",
-        502,
-    )
+    return api_error("Unable to generate a word. Please try again.", 502)
 
 
 # ============================================================
@@ -740,13 +597,7 @@ def generate_word():
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    """
-    Basic health endpoint.
-    """
-
-    return jsonify({
-        "status": "ok"
-    }), 200
+    return jsonify({"status": "ok"}), 200
 
 
 # ============================================================
