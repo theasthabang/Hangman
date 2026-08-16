@@ -16,13 +16,20 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Vite normally proxies requests to Flask, but CORS is kept as
-# a safety net if the frontend ever calls Flask directly.
+# Vite proxies requests to Flask in dev. In production, the frontend
+# lives on a different domain, so CORS must explicitly allow it via
+# FRONTEND_URL, set in Render's Environment tab.
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+
+_allowed_origins: list = [re.compile(r"^http://localhost:\d+$")]
+if FRONTEND_URL:
+    _allowed_origins.append(FRONTEND_URL)
+
 CORS(
     app,
     resources={
         r"/api/*": {
-            "origins": re.compile(r"^http://localhost:\d+$")
+            "origins": _allowed_origins
         }
     },
 )
