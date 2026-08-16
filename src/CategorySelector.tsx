@@ -1,4 +1,4 @@
-import type { Category } from "../types/game"
+import type { Category } from "./types/game"
 
 const CATEGORIES: Category[] = [
   "random", "animals", "technology", "science", "food",

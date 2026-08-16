@@ -1,4 +1,4 @@
-import type { Difficulty } from "../types/game"
+import type { Difficulty } from "./types/game"
 
 const OPTIONS: { value: Difficulty; label: string }[] = [
   { value: "easy", label: "Easy" },
