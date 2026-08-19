@@ -559,6 +559,7 @@ def generate_word():
     for attempt in range(MAX_RETRIES):
         try:
             raw_response = call_groq(prompt)
+            print(f"DEBUG attempt {attempt + 1} - raw AI response: {raw_response}")
 
             validated = validate_generated_word(
                 raw=raw_response,
@@ -568,7 +569,10 @@ def generate_word():
             )
 
             if validated is not None:
+                print(f"DEBUG attempt {attempt + 1} - VALIDATED OK: {validated}")
                 return jsonify(validated), 200
+
+            print(f"DEBUG attempt {attempt + 1} - validation REJECTED the response above")
 
             prompt = build_prompt(
                 difficulty=difficulty,
@@ -582,10 +586,12 @@ def generate_word():
             ValueError,
             KeyError,
             TypeError,
-        ):
+        ) as err:
+            print(f"DEBUG attempt {attempt + 1} - EXCEPTION ({type(err).__name__}): {err}")
             continue
 
-        except Exception:
+        except Exception as err:
+            print(f"DEBUG attempt {attempt + 1} - UNEXPECTED EXCEPTION ({type(err).__name__}): {err}")
             continue
 
     return api_error("Unable to generate a word. Please try again.", 502)
@@ -609,4 +615,5 @@ if __name__ == "__main__":
         host="127.0.0.1",
         port=8000,
         debug=True,
+        threaded=True,
     )
