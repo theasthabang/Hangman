@@ -58,13 +58,19 @@ function App() {
       return
     }
     const lastLetter = game.guessedLetters[count - 1]
+    prevGuessCountRef.current = count
+
+    // Hint-added letters already get their own "Hint used" toast from
+    // HintCard's onUseHint — showing "Great guess!" right after would
+    // just overwrite it, since hint letters are always correct.
+    if (game.hintLetters.includes(lastLetter)) return
+
     if (game.currentWord?.word.includes(lastLetter)) {
       showToast("✓ Great guess!")
     } else {
       showToast("✕ Wrong letter!")
     }
-    prevGuessCountRef.current = count
-  }, [game.guessedLetters, game.currentWord])
+  }, [game.guessedLetters, game.currentWord, game.hintLetters])
 
   useEffect(() => {
     if (game.status === "won") showToast("🎉 Amazing!")
@@ -103,11 +109,12 @@ function App() {
             </button>
 
             {game.stats.gamesPlayed > 0 && (
-              <div className="grid grid-cols-4 gap-3 border-t border-white/10 pt-4 text-center text-xs">
+              <div className="grid grid-cols-3 gap-3 border-t border-white/10 pt-4 text-center text-xs sm:grid-cols-5">
                 <StatBlock label="Played" value={game.stats.gamesPlayed} />
                 <StatBlock label="Won" value={game.stats.gamesWon} />
                 <StatBlock label="Win Rate" value={`${winRate}%`} />
                 <StatBlock label="Streak" value={game.stats.currentStreak} />
+                <StatBlock label="Best Streak" value={game.stats.bestStreak} />
               </div>
             )}
 
@@ -181,6 +188,8 @@ function App() {
         <GameStatus
           status={game.status}
           word={game.currentWord.word}
+          definition={game.currentWord.definition}
+          example={game.currentWord.example}
           onPlayAgain={() => game.startNewGame()}
         />
       )}

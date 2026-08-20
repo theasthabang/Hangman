@@ -21,6 +21,8 @@ export interface GeneratedWord {
   hint: string
   category: string
   difficulty: Difficulty
+  definition: string
+  example: string
 }
 
 export interface GameStats {

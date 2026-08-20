@@ -1,11 +1,17 @@
+import { useState } from "react"
+
 type GameStatusProps = {
   status: "won" | "lost"
   word: string
+  definition: string
+  example: string
   onPlayAgain: () => void
 }
 
-export function GameStatus({ status, word, onPlayAgain }: GameStatusProps) {
+export function GameStatus({ status, word, definition, example, onPlayAgain }: GameStatusProps) {
   const isWon = status === "won"
+  const [meaningRevealed, setMeaningRevealed] = useState(false)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
       <div
@@ -29,6 +35,30 @@ export function GameStatus({ status, word, onPlayAgain }: GameStatusProps) {
         <div className="mb-6 text-sm text-slate-400">
           {isWon ? "Excellent work!" : "Better luck next time!"}
         </div>
+
+        {definition && example && (
+          !meaningRevealed ? (
+            <button
+              type="button"
+              onClick={() => setMeaningRevealed(true)}
+              className="mb-6 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-300 transition-colors hover:border-violet-400/40 hover:bg-white/10 hover:text-violet-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400"
+            >
+              📖 Show Meaning
+            </button>
+          ) : (
+            <div className="mb-6 animate-pop rounded-lg border border-white/10 bg-white/5 p-4 text-left">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-300">
+                Definition
+              </div>
+              <p className="mb-3 text-sm leading-relaxed text-slate-200">{definition}</p>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-300">
+                Example
+              </div>
+              <p className="text-sm italic leading-relaxed text-slate-400">{example}</p>
+            </div>
+          )
+        )}
+
         <button
           type="button"
           onClick={onPlayAgain}

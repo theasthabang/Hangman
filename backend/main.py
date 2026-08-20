@@ -7,6 +7,9 @@ import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # ============================================================
 # Configuration
@@ -15,6 +18,23 @@ from flask_cors import CORS
 load_dotenv()
 
 app = Flask(__name__)
+
+# Render (and most PaaS hosts) sit behind a reverse proxy, so every
+# request would otherwise appear to come from the same internal IP,
+# making per-IP rate limiting useless. x_for=1 trusts exactly one hop
+# of X-Forwarded-For, which matches Render's setup.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
+
+# Every "New Game" click hits the Groq API, which costs money/quota.
+# Without a limit, a refresh-spammer or bot can burn through it in
+# seconds. These numbers are deliberately generous for normal play
+# (a human playing quickly still won't hit them) while capping abuse.
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://",
+)
 
 # Vite normally proxies requests to Flask in dev. In production, the
 # frontend lives on a different domain, so CORS must explicitly allow it.
@@ -29,7 +49,8 @@ if FRONTEND_URL:
     # Compile as a regex too (not a raw string) so every item in this
     # list is the same type — avoids any ambiguity in how flask-cors
     # matches mixed string/regex origins.
-    _allowed_origins.append(re.compile(f"^{re.escape(FRONTEND_URL.strip())}$"))
+    _cleaned_frontend_url = FRONTEND_URL.strip().rstrip("/")
+    _allowed_origins.append(re.compile(f"^{re.escape(_cleaned_frontend_url)}$"))
 
 CORS(
     app,
@@ -306,6 +327,27 @@ Bad clue:
 "A step-by-step procedure called an algorithm."
 
 ============================================================
+MEANING REQUIREMENTS
+============================================================
+
+Also provide a proper dictionary-style definition and one example
+sentence, shown to the player AFTER the round ends (so, unlike the
+clue, these two CAN and SHOULD use the word directly).
+
+The definition MUST:
+
+- Be a clear, accurate, dictionary-style definition of the word.
+- Be one short sentence.
+- Be written for a general audience learning English vocabulary.
+
+The example sentence MUST:
+
+- Use the exact word naturally in context.
+- Be a complete, grammatically correct sentence.
+- Make the word's meaning clear from context.
+- Not simply restate the definition.
+
+============================================================
 QUALITY CONTROL
 ============================================================
 
@@ -323,6 +365,8 @@ Before returning the result, silently verify:
 10. The clue is concise.
 11. The clue is educational.
 12. The content is appropriate for a general audience.
+13. The definition is accurate and uses the word's real meaning.
+14. The example sentence uses the word correctly and naturally.
 
 If ANY requirement fails, silently choose a different word.
 
@@ -348,7 +392,9 @@ The JSON MUST contain exactly these fields:
     "word": "EXAMPLE",
     "hint": "Short educational clue.",
     "category": "Category Name",
-    "difficulty": "{difficulty}"
+    "difficulty": "{difficulty}",
+    "definition": "A clear dictionary-style definition of the word.",
+    "example": "A natural sentence using the word in context."
 }}
 
 Rules:
@@ -357,6 +403,8 @@ Rules:
 - "hint" contains ONLY the clue.
 - "category" contains a short human-readable category.
 - "difficulty" MUST be exactly "{difficulty}".
+- "definition" contains ONLY the definition, and MAY use the word itself.
+- "example" contains ONLY the example sentence, and MUST use the word itself.
 
 Generate the best possible Hangman vocabulary challenge now.
 """.strip()
@@ -394,7 +442,7 @@ def call_groq(prompt: str) -> dict:
                 },
             ],
             "temperature": 0.7,
-            "max_tokens": 300,
+            "max_tokens": 700,
             "response_format": {
                 "type": "json_object"
             },
@@ -461,6 +509,8 @@ def validate_generated_word(
     hint = raw.get("hint")
     category = raw.get("category")
     difficulty = raw.get("difficulty")
+    definition = raw.get("definition")
+    example = raw.get("example")
 
     if not isinstance(word, str):
         return None
@@ -470,12 +520,20 @@ def validate_generated_word(
         return None
     if not isinstance(difficulty, str):
         return None
+    if not isinstance(definition, str):
+        return None
+    if not isinstance(example, str):
+        return None
 
     if not word.strip():
         return None
     if not hint.strip():
         return None
     if not category.strip():
+        return None
+    if not definition.strip():
+        return None
+    if not example.strip():
         return None
 
     normalized_word = normalize_word(word)
@@ -516,11 +574,25 @@ def validate_generated_word(
     if normalized_word.lower() in clean_hint.lower():
         return None
 
+    clean_definition = re.sub(r"\s+", " ", definition.strip())
+    clean_example = re.sub(r"\s+", " ", example.strip())
+
+    if len(clean_definition) < 5 or len(clean_definition) > 300:
+        return None
+    if len(clean_example) < 5 or len(clean_example) > 300:
+        return None
+
+    # Unlike the hint, the example sentence is SUPPOSED to use the word.
+    if normalized_word.lower() not in clean_example.lower():
+        return None
+
     return {
         "word": normalized_word,
         "hint": clean_hint,
         "category": clean_category,
         "difficulty": requested_difficulty,
+        "definition": clean_definition,
+        "example": clean_example,
     }
 
 
@@ -537,6 +609,7 @@ def api_error(message: str, status_code: int):
 # ============================================================
 
 @app.route("/api/generate-word", methods=["POST"])
+@limiter.limit("20 per minute;300 per day")
 def generate_word():
     if not GROQ_API_KEY:
         return api_error("Unable to generate a word. Please try again.", 500)
@@ -587,7 +660,14 @@ def generate_word():
             KeyError,
             TypeError,
         ) as err:
-            print(f"DEBUG attempt {attempt + 1} - EXCEPTION ({type(err).__name__}): {err}")
+            detail = ""
+            response_obj = getattr(err, "response", None)
+            if response_obj is not None:
+                try:
+                    detail = f" | Groq response body: {response_obj.text[:500]}"
+                except Exception:
+                    pass
+            print(f"DEBUG attempt {attempt + 1} - EXCEPTION ({type(err).__name__}): {err}{detail}")
             continue
 
         except Exception as err:

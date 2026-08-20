@@ -24,6 +24,7 @@ export function useHangman() {
   const [guessedLetters, setGuessedLetters] = useState<string[]>([])
   const [status, setStatus] = useState<GameStatus>("playing")
   const [hintsUsed, setHintsUsed] = useState(0)
+  const [hintLetters, setHintLetters] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -55,6 +56,7 @@ export function useHangman() {
       setError(null)
       setGuessedLetters([])
       setHintsUsed(0)
+      setHintLetters([])
       setStatus("playing")
 
       try {
@@ -91,6 +93,7 @@ export function useHangman() {
     if (remaining.length === 0) return
     const letter = remaining[Math.floor(Math.random() * remaining.length)]
     setGuessedLetters(prev => [...prev, letter])
+    setHintLetters(prev => [...prev, letter])
     setHintsUsed(n => n + 1)
   }, [currentWord, status, hintsUsed, guessedLetters])
 
@@ -127,6 +130,7 @@ export function useHangman() {
     incorrectGuesses,
     status,
     hintsUsed,
+    hintLetters,
     hintsRemaining: HINTS_PER_GAME - hintsUsed,
     loading,
     error,
