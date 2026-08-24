@@ -11,6 +11,9 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from auth import require_auth
+from db import ensure_schema, get_connection
+
 # ============================================================
 # Configuration
 # ============================================================
@@ -222,10 +225,7 @@ def build_prompt(
 """.strip()
 
     return f"""
-You are the vocabulary engine for a polished educational Hangman game.
-
-Your task is to generate EXACTLY ONE high-quality English vocabulary
-challenge for a player.
+Generate one English vocabulary word for a Hangman game.
 
 ============================================================
 GAME SETTINGS
@@ -430,10 +430,13 @@ def call_groq(prompt: str) -> dict:
                 {
                     "role": "system",
                     "content": (
-                        "You are a professional English vocabulary "
-                        "content generator for an educational Hangman "
-                        "game. Follow all constraints exactly. "
-                        "Return only the requested JSON object."
+                        "You are a precise JSON generation API, not a "
+                        "conversational assistant. You generate structured "
+                        "vocabulary content for an educational Hangman "
+                        "game. Output EXACTLY one JSON object and nothing "
+                        "else \u2014 no reasoning, no explanation, no "
+                        "preamble, no markdown code fences, no commentary "
+                        "before or after the JSON."
                     ),
                 },
                 {
@@ -441,8 +444,17 @@ def call_groq(prompt: str) -> dict:
                     "content": prompt,
                 },
             ],
-            "temperature": 0.7,
+            "temperature": 0.6,
             "max_tokens": 700,
+            # Low reasoning effort keeps this reasoning model's internal
+            # "thinking" short and predictable. Left unset, gpt-oss-120b
+            # can spend an unpredictable (sometimes large) share of
+            # max_tokens on internal reasoning before ever emitting the
+            # actual JSON — which is what caused empty `content` fields
+            # and intermittent 400s here. This task needs zero real
+            # reasoning (it's a constrained lookup/generation task), so
+            # "low" is the right setting, not a compromise.
+            "reasoning_effort": "low",
             "response_format": {
                 "type": "json_object"
             },
@@ -687,8 +699,120 @@ def health():
 
 
 # ============================================================
+# Stats Sync (auth required) & Leaderboard (public)
+# ============================================================
+# These endpoints only run if a user is signed in via Clerk on the
+# frontend. Guest players never call these — they keep using
+# localStorage exactly as before. See CLERK_AUTH_ROADMAP.md for the
+# full design reasoning.
+
+MAX_USERNAME_LENGTH = 40
+
+
+def _clamp_non_negative_int(value: Any, max_value: int = 1_000_000) -> int:
+    """
+    Defensively coerces a value into a safe, bounded, non-negative
+    int. Stats come from the client, and even though require_auth
+    verifies WHO is sending them, it says nothing about whether the
+    VALUES are sane — someone could still send currentStreak: 99999999
+    by calling the API directly rather than through the game UI.
+    """
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(n, max_value))
+
+
+@app.route("/api/stats/sync", methods=["POST"])
+@require_auth
+def sync_stats():
+    body = request.get_json(silent=True) or {}
+
+    username = str(body.get("username") or "Player").strip()[:MAX_USERNAME_LENGTH]
+    if not username:
+        username = "Player"
+
+    games_played = _clamp_non_negative_int(body.get("gamesPlayed"))
+    games_won = _clamp_non_negative_int(body.get("gamesWon"))
+    current_streak = _clamp_non_negative_int(body.get("currentStreak"))
+    best_streak = _clamp_non_negative_int(body.get("bestStreak"))
+
+    # A won/played game can never exceed games played — reject
+    # obviously-inconsistent data rather than silently storing it.
+    if games_won > games_played:
+        return api_error("gamesWon cannot exceed gamesPlayed", 400)
+    if current_streak > games_won:
+        return api_error("currentStreak cannot exceed gamesWon", 400)
+
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into stats (user_id, username, games_played, games_won, current_streak, best_streak, updated_at)
+                values (%s, %s, %s, %s, %s, %s, now())
+                on conflict (user_id) do update set
+                    username = excluded.username,
+                    games_played = excluded.games_played,
+                    games_won = excluded.games_won,
+                    current_streak = excluded.current_streak,
+                    best_streak = excluded.best_streak,
+                    updated_at = now()
+                """,
+                (request.user_id, username, games_played, games_won, current_streak, best_streak),
+            )
+        conn.commit()
+        conn.close()
+    except Exception as err:
+        print(f"STATS SYNC ERROR: {type(err).__name__}: {err}")
+        return api_error("Unable to save stats right now. Please try again.", 502)
+
+    return jsonify({"status": "ok"}), 200
+
+
+@app.route("/api/leaderboard", methods=["GET"])
+def leaderboard():
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select username, best_streak, games_won
+                from stats
+                order by best_streak desc, games_won desc
+                limit 20
+                """
+            )
+            rows = cur.fetchall()
+        conn.close()
+    except Exception as err:
+        print(f"LEADERBOARD ERROR: {type(err).__name__}: {err}")
+        return api_error("Unable to load the leaderboard right now.", 502)
+
+    return jsonify(
+        [{"username": r[0], "bestStreak": r[1], "gamesWon": r[2]} for r in rows]
+    ), 200
+
+
+# ============================================================
 # Application Entry Point
 # ============================================================
+
+# Runs at import time (not inside `if __name__ == "__main__"`) so this
+# also executes when Gunicorn imports `main:app` in production, not
+# just during local `python main.py` runs. Wrapped defensively so an
+# unconfigured/missing DATABASE_URL doesn't crash the whole app on
+# startup — the core word-guessing game works fine without it; only
+# the auth/leaderboard features depend on it.
+try:
+    if os.getenv("DATABASE_URL"):
+        ensure_schema()
+    else:
+        print("DATABASE_URL not set \u2014 skipping schema setup. "
+              "Auth/leaderboard endpoints will fail until it's configured.")
+except Exception as err:
+    print(f"SCHEMA SETUP WARNING: {type(err).__name__}: {err}")
 
 if __name__ == "__main__":
     app.run(

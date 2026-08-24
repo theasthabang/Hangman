@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
+import { useAuth, useUser } from "@clerk/clerk-react"
 import type { Category, Difficulty, GameStats, GameStatus, GeneratedWord } from "../types/game"
 import { generateWord, WordServiceError } from "../services/wordService"
+import { syncStatsToCloud } from "../services/statsService"
 import {
   HINTS_PER_GAME,
   MAX_INCORRECT_GUESSES,
@@ -17,6 +19,13 @@ const DEFAULT_STATS: GameStats = {
 }
 
 export function useHangman() {
+  // Clerk's hooks are safe to call here even though this is a custom
+  // hook, not a component — React only cares that hooks are called
+  // from within a component's render (which useHangman() itself is,
+  // since App.tsx calls it during render, inside <ClerkProvider>).
+  const { isSignedIn, getToken } = useAuth()
+  const { user } = useUser()
+
   const [difficulty, setDifficulty] = useState<Difficulty>("medium")
   const [category, setCategory] = useState<Category>("random")
 
@@ -33,9 +42,36 @@ export function useHangman() {
     loadJSON<string[]>("hangman:recentWords", [])
   )
 
+  // A player-chosen leaderboard name, separate from their Clerk account
+  // entirely — never their email. Persisted locally, not tied to any
+  // one Clerk field, so it works the same regardless of whether the
+  // player signed up with email, Google, etc.
+  const [displayName, setDisplayNameState] = useState<string>(() =>
+    loadJSON("hangman:displayName", "")
+  )
+
+  const setDisplayName = useCallback((name: string) => {
+    const trimmed = name.trim().slice(0, 30)
+    setDisplayNameState(trimmed)
+    saveJSON("hangman:displayName", trimmed)
+  }, [])
+
   useEffect(() => {
     saveJSON("hangman:stats", stats)
-  }, [stats])
+
+    // Cloud sync only for signed-in users — guests keep working
+    // exactly as before, purely on localStorage. A failed sync here
+    // never throws or blocks the game; see statsService.ts.
+    //
+    // Username priority: the player's own chosen display name first
+    // (never their email), then Clerk's username field if they set
+    // one, then a generic fallback. Email is deliberately never used
+    // here — it shouldn't ever end up on a public leaderboard.
+    if (isSignedIn && user) {
+      const username = displayName || user.username || "Player"
+      syncStatsToCloud(getToken, username, stats)
+    }
+  }, [stats, isSignedIn, user, getToken, displayName])
 
   useEffect(() => {
     saveJSON("hangman:recentWords", recentWords)
@@ -136,6 +172,9 @@ export function useHangman() {
     error,
     stats,
     recentWords,
+    displayName,
+    setDisplayName,
+    isSignedIn: !!isSignedIn,
     startNewGame,
     guessLetter,
     useHint,
