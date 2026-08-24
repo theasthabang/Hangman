@@ -217,6 +217,4 @@ function StatBlock({ label, value }: { label: string; value: string | number }) 
       <div className="text-slate-500">{label}</div>
     </div>
   )
-}
-
-export default App
+} 
