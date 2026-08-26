@@ -5,9 +5,9 @@ export function LoadingState() {
       role="status"
       aria-live="polite"
     >
-      <div className="h-10 w-10 animate-spin rounded-full border-4 border-violet-500/30 border-t-violet-400" />
-      <div className="text-lg font-semibold text-white">🤖 AI is choosing your word...</div>
-      <div className="text-sm text-slate-400">Generating a challenge...</div>
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--gold)]/30 border-t-[var(--gold)]" />
+      <div className="font-chalk text-2xl font-bold text-[var(--chalk)]">🤖 AI is choosing your word...</div>
+      <div className="text-sm text-[var(--chalk-dim)]">Generating a challenge...</div>
     </div>
   )
 }

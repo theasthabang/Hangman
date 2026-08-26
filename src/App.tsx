@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { Play, Gamepad2, Trophy, Percent, Flame, Crown, type LucideIcon } from "lucide-react"
 import { Header} from "./Header"
 import { DifficultySelector } from "./DifficultySelector"
 import { CategorySelector } from "./CategorySelector"
@@ -21,6 +22,16 @@ const TOAST_DURATION_MS = 1800
 function App() {
   const game = useHangman()
   const [toast, setToast] = useState<ToastMessage | null>(null)
+  // Session-only, not localStorage — a guest who dismisses this
+  // shouldn't be nagged again this visit, but it's fine to gently
+  // remind them again next time they come back.
+  const [guestNudgeDismissed, setGuestNudgeDismissed] = useState(() => {
+    try {
+      return window.sessionStorage.getItem("hangman:guestNudgeDismissed") === "1"
+    } catch {
+      return false
+    }
+  })
   const toastIdRef = useRef(0)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevGuessCountRef = useRef(0)
@@ -84,20 +95,20 @@ function App() {
       : 0
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+    <div className="fade-in-up min-h-screen bg-[var(--board)] text-[var(--chalk)]">
       <Header onNewGame={() => game.startNewGame()} loading={game.loading} />
 
-      <main className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
+      <main className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-8 sm:pt-10">
         {!game.currentWord && !game.loading && (
-          <div className="mx-auto grid max-w-4xl gap-6 lg:grid-cols-[1fr_320px]">
-            <div className="flex flex-col gap-6 rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-sm">
+          <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[3fr_2fr]">
+            <div className="fade-in-up glass-card flex flex-col gap-6 rounded-[22px] p-8">
               <DifficultySelector value={game.difficulty} onChange={game.setDifficulty} />
               <CategorySelector value={game.category} onChange={game.setCategory} />
 
               {game.error && (
                 <div
                   role="alert"
-                  className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
+                  className="rounded-lg border border-[var(--rust)]/35 bg-[var(--rust)]/10 p-3 text-sm text-[#f0b3a8]"
                 >
                   {game.error}
                 </div>
@@ -106,31 +117,37 @@ function App() {
               <button
                 type="button"
                 onClick={() => game.startNewGame()}
-                className="w-full rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-4 py-3 font-semibold text-white shadow-lg shadow-violet-900/30 transition-all hover:from-violet-500 hover:to-purple-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400 active:scale-95"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[var(--green)] to-[var(--teal)] px-4 py-3 font-semibold text-white shadow-lg shadow-[var(--green)]/20 transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[var(--green)]/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)] active:scale-95"
               >
-                {game.error ? "Try Again" : "Start Game"}
+                {game.error ? (
+                  "Try Again"
+                ) : (
+                  <>
+                    <Play className="h-4 w-4" fill="currentColor" /> Start Game
+                  </>
+                )}
               </button>
 
               {game.stats.gamesPlayed > 0 && (
-                <div className="grid grid-cols-3 gap-3 border-t border-white/10 pt-4 text-center text-xs sm:grid-cols-5">
-                  <StatBlock label="Played" value={game.stats.gamesPlayed} />
-                  <StatBlock label="Won" value={game.stats.gamesWon} />
-                  <StatBlock label="Win Rate" value={`${winRate}%`} />
-                  <StatBlock label="Streak" value={game.stats.currentStreak} />
-                  <StatBlock label="Best Streak" value={game.stats.bestStreak} />
+                <div className="grid grid-cols-3 divide-x divide-[var(--chalk)]/10 border-t border-[var(--chalk)]/12 pt-4 text-center text-xs sm:grid-cols-5">
+                  <StatBlock icon={Gamepad2} label="Played" value={game.stats.gamesPlayed} />
+                  <StatBlock icon={Trophy} label="Won" value={game.stats.gamesWon} />
+                  <StatBlock icon={Percent} label="Win Rate" value={`${winRate}%`} />
+                  <StatBlock icon={Flame} label="Streak" value={game.stats.currentStreak} />
+                  <StatBlock icon={Crown} label="Best Streak" value={game.stats.bestStreak} />
                 </div>
               )}
 
               {game.recentWords.length > 0 && (
-                <div className="border-t border-white/10 pt-4">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <div className="border-t border-[var(--chalk)]/12 pt-4">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--chalk-dim)]">
                     Recent Words
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {game.recentWords.slice(0, 6).map((w, i) => (
                       <span
                         key={i}
-                        className="rounded-full bg-white/5 px-3 py-1 font-mono text-xs text-slate-400"
+                        className="rounded-full bg-[var(--board-deep)]/70 px-3 py-1 font-mono text-xs text-[var(--chalk-dim)]"
                       >
                         {w}
                       </span>
@@ -141,10 +158,35 @@ function App() {
             </div>
 
             <div className="flex h-full flex-col gap-4">
-              {game.isSignedIn && (
+              {game.isSignedIn && game.displayNameLoaded && (
                 <UsernameEditor displayName={game.displayName} onSave={game.setDisplayName} />
               )}
-              <Leaderboard />
+              {!game.isSignedIn && !guestNudgeDismissed && (
+                <div className="glass-card fade-in-up flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--gold)]/15 text-base">
+                    🏆
+                  </div>
+                  <span className="flex-1 text-[var(--chalk-dim)]">
+                    Sign in to save your streak and join the leaderboard
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGuestNudgeDismissed(true)
+                      try {
+                        window.sessionStorage.setItem("hangman:guestNudgeDismissed", "1")
+                      } catch {
+                        // sessionStorage unavailable — dismissal just won't persist, not worth failing over
+                      }
+                    }}
+                    aria-label="Dismiss"
+                    className="shrink-0 text-[var(--chalk-mute)] transition-colors hover:text-[var(--chalk)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              <Leaderboard refreshKey={game.leaderboardRefreshKey} />
             </div>
           </div>
         )}
@@ -210,11 +252,18 @@ function App() {
   )
 }
 
-function StatBlock({ label, value }: { label: string; value: string | number }) {
+type StatBlockProps = {
+  icon: LucideIcon
+  label: string
+  value: string | number
+}
+
+function StatBlock({ icon: Icon, label, value }: StatBlockProps) {
   return (
-    <div>
-      <div className="font-mono text-lg font-bold text-white">{value}</div>
-      <div className="text-slate-500">{label}</div>
+    <div className="flex flex-col items-center gap-1 px-1">
+      <Icon className="h-4 w-4 text-[var(--gold)]" strokeWidth={2} />
+      <div className="font-mono text-lg font-bold text-[var(--chalk)]">{value}</div>
+      <div className="text-[10px] uppercase tracking-wide text-[var(--chalk-dim)]">{label}</div>
     </div>
   )
 }

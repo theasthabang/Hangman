@@ -1,18 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
+:root {
+  --board: #061412;
+  --board-deep: #0b211c;
+  --chalk: #f1f5f3;
+  --chalk-dim: #a7b8b2;
+  --chalk-mute: #71827c;
+  --green: #22c55e;
+  --teal: #14b8a6;
+  --gold: #34d399;
+  --rust: #ef4444;
+  --award: #fbbf24;
+  --ink: #04140f;
 }
 
-/* faint chalk-dust grain across the board — cheap, no image asset needed */
-.chalk-grain {
-  background-image:
-    radial-gradient(rgba(242, 237, 225, 0.04) 1px, transparent 1px),
-    radial-gradient(rgba(242, 237, 225, 0.03) 1px, transparent 1px);
-  background-size: 26px 26px, 34px 34px;
-  background-position: 0 0, 12px 18px;
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.08), transparent 35%),
+    radial-gradient(circle at 80% 70%, rgba(20, 184, 166, 0.06), transparent 35%),
+    var(--board);
+}
+
+@layer components {
+  .font-chalk {
+    font-family: 'Manrope', 'Inter', sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  .font-read {
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* soft glass surface used for cards throughout. Only sets width/style
+     here, not a fixed color, so a Tailwind border-[color] utility on
+     the element (e.g. the win/lose modal's green vs red border) can
+     still win the cascade rather than being silently overridden. */
+  .glass-card {
+    background: rgba(10, 30, 25, 0.72);
+    border-width: 1px;
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  }
+
+  .fade-in-up {
+    animation: fade-in-up 0.4s ease-out both;
+  }
+}
+
+/* gentle entrance for cards on load — fast and understated, not bouncy */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

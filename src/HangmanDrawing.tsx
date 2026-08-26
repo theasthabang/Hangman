@@ -14,11 +14,11 @@ const PARTS = [
 
 export function HangmanDrawing({ incorrectGuesses, maxGuesses }: HangmanDrawingProps) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+    <div className="fade-in-up glass-card rounded-[22px] p-6">
       <div className="mb-4 flex items-center justify-between text-sm">
-        <span className="font-semibold text-slate-300">Incorrect Guesses</span>
+        <span className="font-semibold text-[var(--chalk-dim)]">Incorrect Guesses</span>
         <span
-          className="font-mono font-bold text-violet-300"
+          className="font-mono font-bold text-[var(--rust)]"
           aria-live="polite"
         >
           {incorrectGuesses}/{maxGuesses}
@@ -32,7 +32,7 @@ export function HangmanDrawing({ incorrectGuesses, maxGuesses }: HangmanDrawingP
         role="img"
         aria-label={`Hangman figure, ${incorrectGuesses} of ${maxGuesses} incorrect guesses drawn`}
       >
-        <g stroke="#64748b" strokeWidth={4} opacity={0.7}>
+        <g stroke="#8fa39a" strokeWidth={2.5} opacity={0.4}>
           <line x1="10" y1="210" x2="130" y2="210" />
           <line x1="40" y1="210" x2="40" y2="10" />
           <line x1="40" y1="10" x2="140" y2="10" />
@@ -42,9 +42,13 @@ export function HangmanDrawing({ incorrectGuesses, maxGuesses }: HangmanDrawingP
           <g
             key={i}
             className="animate-draw"
-            stroke="#a78bfa"
-            strokeWidth={5}
-            style={{ strokeDasharray: part.length, strokeDashoffset: part.length }}
+            stroke="#19d39a"
+            strokeWidth={3}
+            style={{
+              strokeDasharray: part.length,
+              strokeDashoffset: part.length,
+              filter: "drop-shadow(0 0 4px rgba(25, 211, 154, 0.55))",
+            }}
           >
             {part.el}
           </g>

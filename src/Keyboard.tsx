@@ -20,11 +20,11 @@ export function Keyboard({
   disabled = false,
 }: KeyboardProps) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-      <div className="mb-3 text-sm font-semibold text-slate-300">Choose a Letter</div>
-      <div className="flex flex-col gap-1.5">
+    <div className="fade-in-up glass-card rounded-[22px] p-6">
+      <div className="mb-4 text-sm font-semibold text-[var(--chalk-dim)]">Choose a Letter</div>
+      <div className="flex flex-col gap-2">
         {ROWS.map((row, i) => (
-          <div key={i} className="flex justify-center gap-1.5">
+          <div key={i} className="flex justify-center gap-2">
             {row.map(letter => {
               const isGuessed = guessedLetters.includes(letter)
               const isCorrect = correctLetters.includes(letter)
@@ -41,11 +41,11 @@ export function Keyboard({
                   aria-label={label}
                   aria-pressed={isGuessed}
                   className={[
-                    "flex h-10 w-8 items-center justify-center rounded-lg text-sm font-bold uppercase transition-all sm:h-11 sm:w-9",
-                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400",
-                    isCorrect && "bg-violet-500 text-white shadow-md shadow-violet-500/30",
-                    isIncorrect && "bg-red-500/70 text-white opacity-70",
-                    !isCorrect && !isIncorrect && "bg-slate-800 text-slate-200 enabled:hover:bg-slate-700 enabled:active:scale-95",
+                    "flex h-12 w-10 items-center justify-center rounded-xl text-sm font-bold uppercase transition-all duration-150 sm:h-14 sm:w-12",
+                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]",
+                    isCorrect && "bg-[var(--gold)] text-[var(--ink)] shadow-md shadow-[var(--gold)]/30",
+                    isIncorrect && "bg-[var(--rust)]/75 text-[var(--chalk)] opacity-70",
+                    !isCorrect && !isIncorrect && "border border-[var(--chalk)]/12 bg-[var(--board)]/70 text-[var(--chalk)] enabled:hover:border-[var(--gold)]/50 enabled:hover:shadow-[0_0_14px_-3px_var(--gold)] enabled:active:scale-90",
                     disabled && !isGuessed && "opacity-50",
                   ]
                     .filter(Boolean)

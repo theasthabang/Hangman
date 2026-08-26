@@ -8,31 +8,58 @@ type GameStatusProps = {
   onPlayAgain: () => void
 }
 
+// Browser-native text-to-speech — no API key, no backend call, works
+// offline. Cancels any speech already in progress first so rapid
+// clicks (word, then definition) don't overlap or queue up.
+function speak(text: string) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return
+  window.speechSynthesis.cancel()
+  const utterance = new SpeechSynthesisUtterance(text)
+  utterance.rate = 0.9
+  utterance.lang = "en-US"
+  window.speechSynthesis.speak(utterance)
+}
+
+const speechSupported = typeof window !== "undefined" && "speechSynthesis" in window
+
 export function GameStatus({ status, word, definition, example, onPlayAgain }: GameStatusProps) {
   const isWon = status === "won"
   const [meaningRevealed, setMeaningRevealed] = useState(false)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
       <div
         className={[
-          "w-full max-w-sm rounded-2xl border p-8 text-center shadow-2xl",
-          isWon ? "border-violet-500/40 bg-slate-900" : "animate-shake border-red-500/40 bg-slate-900",
+          "glass-card w-full max-w-sm rounded-[24px] p-8 text-center shadow-2xl",
+          isWon ? "border-[var(--gold)]/35" : "animate-shake border-[var(--rust)]/35",
         ].join(" ")}
         role="alertdialog"
         aria-live="assertive"
         aria-label={isWon ? "You won" : "Game over"}
       >
-        <div className="mb-2 text-3xl font-bold text-white">
-          {isWon ? "🎉 YOU WON!" : "GAME OVER"}
+        <div className="font-chalk mb-1 text-3xl font-extrabold text-[var(--chalk)]">
+          {isWon ? "🎉 You Won!" : "Game Over"}
         </div>
-        <div className="mb-1 mt-4 text-xs uppercase tracking-wide text-slate-400">
+        <div className="mb-1 mt-4 text-xs uppercase tracking-wide text-[var(--chalk-dim)]">
           The word was
         </div>
-        <div className="mb-4 font-mono text-2xl font-bold tracking-widest text-violet-300">
-          {word}
+        <div className="mb-4 flex items-center justify-center gap-2">
+          <span className="font-mono text-2xl font-bold tracking-widest text-[var(--gold)]">
+            {word}
+          </span>
+          {speechSupported && (
+            <button
+              type="button"
+              onClick={() => speak(word)}
+              aria-label={`Pronounce ${word}`}
+              title="Hear pronunciation"
+              className="rounded-full p-1.5 text-[var(--gold)] transition-colors hover:bg-[var(--gold)]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
+            >
+              🔊
+            </button>
+          )}
         </div>
-        <div className="mb-6 text-sm text-slate-400">
+        <div className="mb-6 text-sm text-[var(--chalk-dim)]">
           {isWon ? "Excellent work!" : "Better luck next time!"}
         </div>
 
@@ -41,28 +68,44 @@ export function GameStatus({ status, word, definition, example, onPlayAgain }: G
             <button
               type="button"
               onClick={() => setMeaningRevealed(true)}
-              className="mb-6 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-300 transition-colors hover:border-violet-400/40 hover:bg-white/10 hover:text-violet-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400"
+              className="mb-6 w-full rounded-xl border border-[var(--chalk)]/15 bg-transparent px-4 py-2.5 text-sm font-semibold text-[var(--chalk-dim)] transition-all duration-200 hover:border-[var(--gold)]/40 hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
             >
               📖 Show Meaning
             </button>
           ) : (
-            <div className="mb-6 animate-pop rounded-lg border border-white/10 bg-white/5 p-4 text-left">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-300">
-                Definition
+            <div className="fade-in-up mb-6 rounded-xl border border-[var(--gold)]/20 bg-[var(--board)]/70 p-5 text-left">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-xs font-semibold uppercase tracking-wide text-[var(--gold)]">
+                  Definition
+                </div>
+                {speechSupported && (
+                  <button
+                    type="button"
+                    onClick={() => speak(`${word}. ${definition} For example: ${example}`)}
+                    aria-label={`Listen to definition of ${word}`}
+                    title="Listen to definition and example"
+                    className="rounded-full p-1 text-[var(--chalk-dim)] transition-colors hover:bg-[var(--gold)]/10 hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
+                  >
+                    🔊
+                  </button>
+                )}
               </div>
-              <p className="mb-3 text-sm leading-relaxed text-slate-200">{definition}</p>
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-300">
+              <p className="font-read mb-3 text-sm leading-relaxed text-[var(--chalk)]">{definition}</p>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--gold)]">
                 Example
               </div>
-              <p className="text-sm italic leading-relaxed text-slate-400">{example}</p>
+              <p className="font-read text-sm italic leading-relaxed text-[var(--chalk-dim)]">{example}</p>
             </div>
           )
         )}
 
         <button
           type="button"
-          onClick={onPlayAgain}
-          className="w-full rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-4 py-3 font-semibold text-white shadow-lg shadow-violet-900/30 transition-all hover:from-violet-500 hover:to-purple-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400 active:scale-95"
+          onClick={() => {
+            if (speechSupported) window.speechSynthesis.cancel()
+            onPlayAgain()
+          }}
+          className="w-full rounded-xl bg-gradient-to-r from-[var(--green)] to-[var(--teal)] px-4 py-3 font-semibold text-white shadow-lg shadow-[var(--green)]/25 transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)] active:scale-95"
         >
           {isWon ? "Play Again" : "Try Again"}
         </button>

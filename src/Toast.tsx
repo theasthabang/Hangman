@@ -24,7 +24,7 @@ export function Toast({ toast }: ToastProps) {
         <div
           key={toast.id}
           role="status"
-          className="pointer-events-none animate-pop rounded-full border border-white/10 bg-slate-800/95 px-5 py-2.5 text-sm font-medium text-white shadow-xl shadow-black/40 backdrop-blur-md"
+          className="pointer-events-none animate-pop rounded-full border border-[var(--gold)]/25 bg-[var(--board-deep)]/95 px-5 py-2.5 text-sm font-medium text-[var(--chalk)] shadow-xl shadow-black/40 backdrop-blur-md"
         >
           {toast.text}
         </div>

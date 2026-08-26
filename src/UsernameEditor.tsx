@@ -21,9 +21,9 @@ export function UsernameEditor({ displayName, onSave }: UsernameEditorProps) {
 
   if (!editing) {
     return (
-      <div className="mb-4 flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">
-        <span className="text-slate-300">
-          Playing as <span className="font-semibold text-violet-300">{displayName}</span>
+      <div className="mb-4 flex items-center justify-between rounded-lg border border-[var(--chalk)]/12 bg-[var(--board-deep)]/60 px-3 py-2 text-sm">
+        <span className="text-[var(--chalk-dim)]">
+          Playing as <span className="font-semibold text-[var(--gold)]">{displayName}</span>
         </span>
         <button
           type="button"
@@ -31,7 +31,7 @@ export function UsernameEditor({ displayName, onSave }: UsernameEditorProps) {
             setDraft(displayName)
             setEditing(true)
           }}
-          className="text-xs text-slate-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-violet-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400"
+          className="text-xs text-[var(--chalk-dim)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
         >
           Change
         </button>
@@ -40,8 +40,8 @@ export function UsernameEditor({ displayName, onSave }: UsernameEditorProps) {
   }
 
   return (
-    <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-3">
-      <label htmlFor="display-name-input" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+    <div className="mb-4 rounded-lg border border-[var(--chalk)]/12 bg-[var(--board-deep)]/60 p-3">
+      <label htmlFor="display-name-input" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--chalk-dim)]">
         Pick a leaderboard name
       </label>
       <div className="flex items-center gap-2">
@@ -55,18 +55,18 @@ export function UsernameEditor({ displayName, onSave }: UsernameEditorProps) {
           placeholder="e.g. WordWizard99"
           maxLength={30}
           autoFocus
-          className="flex-1 rounded-md border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400"
+          className="flex-1 rounded-md border border-[var(--chalk)]/15 bg-[var(--board)]/70 px-3 py-2 text-sm text-[var(--chalk)] placeholder:text-[var(--chalk-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
         />
         <button
           type="button"
           onClick={submit}
           disabled={!draft.trim()}
-          className="rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400"
+          className="rounded-md bg-[var(--gold)] px-4 py-2 text-sm font-semibold text-[var(--ink)] transition-colors hover:brightness-110 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
         >
           Save
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-[var(--chalk-dim)]">
         This name is shown publicly on the leaderboard \u2014 never your email.
       </p>
     </div>
