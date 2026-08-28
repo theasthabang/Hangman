@@ -295,6 +295,34 @@ Also avoid trivial variations of excluded words, including:
 - Words that are essentially the same vocabulary item.
 
 ============================================================
+VARIETY REQUIREMENT
+============================================================
+
+Language models have a strong, well-documented tendency to default
+to the single most "obvious" or statistically common word for any
+given category — the first word that comes to mind — which causes
+noticeable repetition across many requests even when each individual
+request has no memory of the others.
+
+You MUST actively counteract this tendency:
+
+- Do NOT default to the most stereotypical or highest-frequency word
+  for the category. Deliberately reach further into the category's
+  full vocabulary breadth instead of its most "obvious" members.
+- Mentally generate 4-5 candidate words for this category and
+  difficulty BEFORE choosing, then select one that is NOT the most
+  cliché or overused choice among them.
+- Specifically avoid over-relying on these words, which have been
+  observed as frequent repeat offenders across many requests:
+  CRYSTAL, ORCHARD, MANTLE, TURBINE, GALAXY, CASCADE, GIZZARD,
+  NEBULA, DOLPHIN, PENGUIN, GIRAFFE. Only use one of these if it is
+  genuinely the best fit and no reasonable alternative exists — never
+  as a default choice.
+- Vary WHICH part of the category you draw from each time (e.g. for
+  "Science": rotate between physics, chemistry, biology, geology,
+  astronomy — don't always land on the same sub-topic).
+
+============================================================
 CLUE REQUIREMENTS
 ============================================================
 
@@ -444,7 +472,7 @@ def call_groq(prompt: str) -> dict:
                     "content": prompt,
                 },
             ],
-            "temperature": 0.6,
+            "temperature": 0.95,
             "max_tokens": 700,
             # Low reasoning effort keeps this reasoning model's internal
             # "thinking" short and predictable. Left unset, gpt-oss-120b
