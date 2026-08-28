@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react"
 import type { Category } from "./types/game"
 
 const CATEGORIES: Category[] = [
@@ -12,44 +13,100 @@ type CategorySelectorProps = {
   disabled?: boolean
 }
 
+// A fully custom dropdown, built entirely from <div>/<button> — not a
+// native <select>. Native <select> text rendering can be silently
+// overridden by OS-level settings (Windows forced-colors/high-contrast
+// modes, some browser themes) in a way CSS genuinely cannot fix, no
+// matter how explicit the color declaration is. Plain HTML text in a
+// styled div has no such escape hatch — it always renders exactly
+// what CSS says, which is the actual, permanent fix here.
 export function CategorySelector({ value, onChange, disabled }: CategorySelectorProps) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false)
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    document.addEventListener("keydown", handleEscape)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      document.removeEventListener("keydown", handleEscape)
+    }
+  }, [open])
+
   return (
-    <div>
-      <label
+    <div ref={containerRef} className="relative">
+      <div
+        id="category-label"
         className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--chalk-dim)]"
-        htmlFor="category-select"
       >
         Category
-      </label>
-      <div className="relative">
-        <select
-          id="category-select"
-          value={value}
-          disabled={disabled}
-          onChange={e => onChange(e.target.value as Category)}
-          // appearance-none + an explicit inline color, since native
-          // <select> text color isn't always fully honored by every
-          // browser/OS combo when only set via a CSS class — this
-          // guarantees the text actually renders visibly instead of
-          // silently falling back to a low-contrast system default.
-          style={{ color: "var(--chalk)" }}
-          className="w-full appearance-none rounded-lg border border-[var(--chalk)]/15 bg-[var(--board-deep)]/70 px-4 py-2.5 pr-9 text-sm font-medium capitalize text-[var(--chalk)] transition-colors focus-visible:border-[var(--gold)]/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)] disabled:opacity-50"
-        >
-          {CATEGORIES.map(cat => (
-            <option key={cat} value={cat} className="bg-[var(--board-deep)] capitalize text-[var(--chalk)]">
-              {cat}
-            </option>
-          ))}
-        </select>
+      </div>
+
+      <button
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-labelledby="category-label"
+        onClick={() => setOpen(o => !o)}
+        className="flex w-full items-center justify-between rounded-lg border border-[var(--chalk)]/15 bg-[var(--board-deep)]/70 px-4 py-2.5 text-left text-sm font-medium transition-colors focus-visible:border-[var(--gold)]/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)] disabled:opacity-50"
+      >
+        <span className="capitalize text-[var(--chalk)]">{value}</span>
         <svg
-          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--chalk-dim)]"
+          className={[
+            "h-4 w-4 shrink-0 text-[var(--chalk-dim)] transition-transform duration-150",
+            open ? "rotate-180" : "",
+          ].join(" ")}
           viewBox="0 0 20 20"
           fill="none"
           aria-hidden="true"
         >
           <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-      </div>
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          aria-labelledby="category-label"
+          className="glass-card absolute z-20 mt-2 flex max-h-64 w-full flex-col overflow-y-auto rounded-lg p-1 shadow-xl"
+        >
+          {CATEGORIES.map(cat => {
+            const isSelected = cat === value
+            return (
+              <button
+                key={cat}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => {
+                  onChange(cat)
+                  setOpen(false)
+                }}
+                className={[
+                  "flex w-full items-center rounded-md px-3 py-2 text-left text-sm capitalize transition-colors",
+                  isSelected
+                    ? "bg-[var(--gold)]/15 font-semibold text-[var(--gold)]"
+                    : "text-[var(--chalk)] hover:bg-[var(--chalk)]/8",
+                ].join(" ")}
+              >
+                {cat}
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
