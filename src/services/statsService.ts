@@ -25,14 +25,14 @@ export async function syncStatsToCloud(
   getToken: () => Promise<string | null>,
   username: string,
   stats: GameStats
-): Promise<void> {
+): Promise<boolean> {
   let token: string | null
   try {
     token = await getToken()
   } catch {
-    return
+    return false
   }
-  if (!token) return
+  if (!token) return false
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/stats/sync`, {
@@ -51,9 +51,12 @@ export async function syncStatsToCloud(
     })
     if (!response.ok) {
       console.warn("Stats sync failed:", response.status)
+      return false
     }
+    return true
   } catch (err) {
     console.warn("Stats sync failed:", err)
+    return false
   }
 }
 
