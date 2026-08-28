@@ -23,7 +23,7 @@ export function useHangman() {
   // hook, not a component — React only cares that hooks are called
   // from within a component's render (which useHangman() itself is,
   // since App.tsx calls it during render, inside <ClerkProvider>).
-  const { isSignedIn, getToken } = useAuth()
+  const { isSignedIn, getToken, isLoaded: authLoaded } = useAuth()
   const { user } = useUser()
 
   const [difficulty, setDifficulty] = useState<Difficulty>("medium")
@@ -43,18 +43,37 @@ export function useHangman() {
   )
 
   // A player-chosen leaderboard name, separate from their Clerk account
-  // entirely — never their email. Persisted locally, not tied to any
-  // one Clerk field, so it works the same regardless of whether the
-  // player signed up with email, Google, etc.
-  const [displayName, setDisplayNameState] = useState<string>(() =>
-    loadJSON("hangman:displayName", "")
-  )
+  // entirely — never their email. Scoped to THIS SPECIFIC user's Clerk
+  // ID (hangman:displayName:<userId>), not one shared key — otherwise
+  // two different people signing into the same browser would inherit
+  // or overwrite each other's name. This is also what makes it a true
+  // "ask once, remembered forever for that account" flow, matching
+  // how real apps handle it, instead of re-prompting or leaking
+  // across accounts.
+  const [displayName, setDisplayNameState] = useState<string>("")
+  const [displayNameLoaded, setDisplayNameLoaded] = useState(false)
+  const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0)
 
-  const setDisplayName = useCallback((name: string) => {
-    const trimmed = name.trim().slice(0, 30)
-    setDisplayNameState(trimmed)
-    saveJSON("hangman:displayName", trimmed)
-  }, [])
+  useEffect(() => {
+    if (!authLoaded) return
+    if (!user) {
+      setDisplayNameState("")
+      setDisplayNameLoaded(true)
+      return
+    }
+    setDisplayNameState(loadJSON(`hangman:displayName:${user.id}`, ""))
+    setDisplayNameLoaded(true)
+  }, [authLoaded, user])
+
+  const setDisplayName = useCallback(
+    (name: string) => {
+      if (!user) return
+      const trimmed = name.trim().slice(0, 30)
+      setDisplayNameState(trimmed)
+      saveJSON(`hangman:displayName:${user.id}`, trimmed)
+    },
+    [user]
+  )
 
   useEffect(() => {
     saveJSON("hangman:stats", stats)
@@ -63,15 +82,21 @@ export function useHangman() {
     // exactly as before, purely on localStorage. A failed sync here
     // never throws or blocks the game; see statsService.ts.
     //
+    // Waits on displayNameLoaded so a game finishing in the split
+    // second before localStorage has been read doesn't accidentally
+    // sync "Player" and overwrite a name the user already chose.
+    //
     // Username priority: the player's own chosen display name first
     // (never their email), then Clerk's username field if they set
     // one, then a generic fallback. Email is deliberately never used
     // here — it shouldn't ever end up on a public leaderboard.
-    if (isSignedIn && user) {
+    if (isSignedIn && user && displayNameLoaded) {
       const username = displayName || user.username || "Player"
-      syncStatsToCloud(getToken, username, stats)
+      syncStatsToCloud(getToken, username, stats).then(success => {
+        if (success) setLeaderboardRefreshKey(k => k + 1)
+      })
     }
-  }, [stats, isSignedIn, user, getToken, displayName])
+  }, [stats, isSignedIn, user, getToken, displayName, displayNameLoaded])
 
   useEffect(() => {
     saveJSON("hangman:recentWords", recentWords)
@@ -174,6 +199,8 @@ export function useHangman() {
     recentWords,
     displayName,
     setDisplayName,
+    displayNameLoaded,
+    leaderboardRefreshKey,
     isSignedIn: !!isSignedIn,
     startNewGame,
     guessLetter,
