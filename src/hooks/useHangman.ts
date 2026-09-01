@@ -16,6 +16,17 @@ const DEFAULT_STATS: GameStats = {
   gamesWon: 0,
   currentStreak: 0,
   bestStreak: 0,
+  perfectGames: 0,
+}
+
+// Builds the localStorage key a piece of data should live under for
+// the CURRENT auth context — a specific signed-in account, or a
+// shared "guest" bucket for anyone not signed in. Used for both stats
+// and recent words so progress never leaks between different Clerk
+// accounts sharing one browser, and guests get their own separate
+// history too.
+function scopedKey(base: string, userId: string | null | undefined): string {
+  return userId ? `${base}:${userId}` : `${base}:guest`
 }
 
 export function useHangman() {
@@ -37,10 +48,46 @@ export function useHangman() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [stats, setStats] = useState<GameStats>(() => loadJSON("hangman:stats", DEFAULT_STATS))
-  const [recentWords, setRecentWords] = useState<string[]>(() =>
-    loadJSON<string[]>("hangman:recentWords", [])
-  )
+  // --- Stats & recent words: scoped per-account, race-condition-safe ---
+  //
+  // "Loaded" is DERIVED fresh every render by comparing the key we
+  // SHOULD be showing right now (statsKey, computed straight from the
+  // current auth state) against the key whose data we last actually
+  // loaded (loadedStatsKey, a real state value). This is deliberately
+  // NOT a plain boolean flag set via setState — a boolean like that
+  // would lag one render behind an auth change (state updates from an
+  // effect only apply starting the NEXT render), creating a window
+  // where a "save" effect could see a stale "loaded=true" alongside
+  // stale data from the PREVIOUS user, and write it into the NEW
+  // user's storage key — silently overwriting their real saved
+  // progress. Deriving it fresh every render closes that window
+  // completely, since it flips to false in the very same render the
+  // auth context changes, before any other effect can act on stale
+  // data.
+  const authKeySuffix = authLoaded ? user?.id ?? null : undefined
+  const statsKey = authKeySuffix === undefined ? null : scopedKey("hangman:stats", authKeySuffix)
+  const recentWordsKey =
+    authKeySuffix === undefined ? null : scopedKey("hangman:recentWords", authKeySuffix)
+
+  const [stats, setStats] = useState<GameStats>(DEFAULT_STATS)
+  const [recentWords, setRecentWords] = useState<string[]>([])
+  const [loadedStatsKey, setLoadedStatsKey] = useState<string | null>(null)
+  const [loadedRecentWordsKey, setLoadedRecentWordsKey] = useState<string | null>(null)
+
+  const statsLoaded = statsKey !== null && loadedStatsKey === statsKey
+  const recentWordsLoaded = recentWordsKey !== null && loadedRecentWordsKey === recentWordsKey
+
+  useEffect(() => {
+    if (!statsKey || statsKey === loadedStatsKey) return
+    setStats(loadJSON(statsKey, DEFAULT_STATS))
+    setLoadedStatsKey(statsKey)
+  }, [statsKey, loadedStatsKey])
+
+  useEffect(() => {
+    if (!recentWordsKey || recentWordsKey === loadedRecentWordsKey) return
+    setRecentWords(loadJSON<string[]>(recentWordsKey, []))
+    setLoadedRecentWordsKey(recentWordsKey)
+  }, [recentWordsKey, loadedRecentWordsKey])
 
   // A player-chosen leaderboard name, separate from their Clerk account
   // entirely — never their email. Scoped to THIS SPECIFIC user's Clerk
@@ -57,13 +104,27 @@ export function useHangman() {
   useEffect(() => {
     if (!authLoaded) return
     if (!user) {
+      // Reset to NOT-loaded (false), not true. If this were true here,
+      // a later sign-in by the same user would satisfy App.tsx's
+      // "isSignedIn && displayNameLoaded" gate on the very first render
+      // — before this effect has actually re-run to fetch their saved
+      // name — so UsernameEditor would mount with an empty name,
+      // permanently lock its "show the input" state (a useState
+      // initializer only runs once per mount), and never correct
+      // itself even after the real saved name loads a moment later.
+      // Keeping this false forces App.tsx to wait for the fetch below
+      // to finish before UsernameEditor is allowed to mount at all.
       setDisplayNameState("")
-      setDisplayNameLoaded(true)
+      setDisplayNameLoaded(false)
       return
     }
     setDisplayNameState(loadJSON(`hangman:displayName:${user.id}`, ""))
     setDisplayNameLoaded(true)
-  }, [authLoaded, user])
+    // Depends on user.id specifically, not the whole user object —
+    // Clerk can return a new object reference across renders even for
+    // the same logged-in user, which would otherwise needlessly re-run
+    // this (harmless, but no reason to).
+  }, [authLoaded, user?.id])
 
   const setDisplayName = useCallback(
     (name: string) => {
@@ -72,11 +133,16 @@ export function useHangman() {
       setDisplayNameState(trimmed)
       saveJSON(`hangman:displayName:${user.id}`, trimmed)
     },
-    [user]
+    [user?.id]
   )
 
   useEffect(() => {
-    saveJSON("hangman:stats", stats)
+    // Guards on statsLoaded (see the derived-key explanation above) so
+    // this can never fire with the wrong context's data — either
+    // before this account's real stats have loaded, or with a stale
+    // snapshot left over from a different account/guest state.
+    if (!statsKey || !statsLoaded) return
+    saveJSON(statsKey, stats)
 
     // Cloud sync only for signed-in users — guests keep working
     // exactly as before, purely on localStorage. A failed sync here
@@ -96,11 +162,12 @@ export function useHangman() {
         if (success) setLeaderboardRefreshKey(k => k + 1)
       })
     }
-  }, [stats, isSignedIn, user, getToken, displayName, displayNameLoaded])
+  }, [stats, statsKey, statsLoaded, isSignedIn, user, getToken, displayName, displayNameLoaded])
 
   useEffect(() => {
-    saveJSON("hangman:recentWords", recentWords)
-  }, [recentWords])
+    if (!recentWordsKey || !recentWordsLoaded) return
+    saveJSON(recentWordsKey, recentWords)
+  }, [recentWords, recentWordsKey, recentWordsLoaded])
 
   const incorrectLetters = currentWord
     ? guessedLetters.filter(letter => !currentWord.word.includes(letter))
@@ -174,6 +241,7 @@ export function useHangman() {
           gamesWon: prev.gamesWon + 1,
           currentStreak: nextStreak,
           bestStreak: Math.max(prev.bestStreak, nextStreak),
+          perfectGames: prev.perfectGames + (incorrectGuesses === 0 ? 1 : 0),
         }
       })
     } else if (isLost) {
@@ -196,6 +264,7 @@ export function useHangman() {
     loading,
     error,
     stats,
+    statsLoaded,
     recentWords,
     displayName,
     setDisplayName,

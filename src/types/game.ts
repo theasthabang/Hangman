@@ -30,4 +30,9 @@ export interface GameStats {
   gamesWon: number
   currentStreak: number
   bestStreak: number
+  // Won with zero incorrect guesses. Local-only — used purely to
+  // unlock the "Perfect Game" achievement badge, never sent to the
+  // backend/leaderboard, so it's safe to add without touching the
+  // sync payload or database schema at all.
+  perfectGames: number
 }
