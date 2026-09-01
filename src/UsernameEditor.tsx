@@ -55,7 +55,7 @@ export function UsernameEditor({ displayName, onSave }: UsernameEditorProps) {
           placeholder="e.g. WordWizard99"
           maxLength={30}
           autoFocus
-          className="flex-1 rounded-md border border-[var(--chalk)]/15 bg-[var(--board)]/70 px-3 py-2 text-sm text-[var(--chalk)] placeholder:text-[var(--chalk-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
+          className="flex-1 rounded-md border font-mono text-teal-950 border-[var(--chalk)]/15 bg-[var(--board)]/70 px-3 py-2 text-sm text-[var(--chalk)] placeholder:text-[var(--chalk-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
         />
         <button
           type="button"

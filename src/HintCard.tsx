@@ -1,3 +1,5 @@
+import { Lightbulb } from "lucide-react"
+
 type HintCardProps = {
   hint: string
   hintsLeft: number
@@ -10,7 +12,9 @@ export function HintCard({ hint, hintsLeft, hintsTotal, onUseHint, disabled }: H
   return (
     <div className="fade-in-up glass-card rounded-[22px] p-6">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-semibold text-[var(--chalk-dim)]">💡 Hint</span>
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--chalk-dim)]">
+          <Lightbulb className="h-4 w-4 text-[var(--gold)]" strokeWidth={2} /> Hint
+        </span>
         <button
           type="button"
           onClick={onUseHint}

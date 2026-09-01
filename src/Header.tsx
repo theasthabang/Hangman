@@ -1,4 +1,5 @@
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react"
+import { Puzzle } from "lucide-react"
 
 type HeaderProps = {
   onNewGame: () => void
@@ -11,7 +12,7 @@ export function Header({ onNewGame, loading }: HeaderProps) {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6 sm:px-8 sm:py-8">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--green)] to-[var(--teal)] text-xl shadow-lg shadow-[var(--green)]/25">
-            ♙
+            <Puzzle className="h-6 w-6 text-[var(--ink)]" strokeWidth={2.2} />
           </div>
           <div>
             <div className="font-chalk text-2xl font-extrabold leading-tight text-[var(--chalk)] sm:text-[26px]">

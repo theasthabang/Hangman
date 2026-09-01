@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Trophy, Flame } from "lucide-react"
 import { fetchLeaderboard, type LeaderboardEntry } from "./services/statsService"
 
 type LeaderboardProps = {
@@ -27,10 +28,11 @@ export function Leaderboard({ refreshKey }: LeaderboardProps) {
 
   if (entries.length === 0) {
     return (
-      <div className="fade-in-up glass-card flex flex-1 flex-col items-center justify-center rounded-[22px] p-6 text-center">
-        <div className="font-chalk mb-1 text-2xl font-bold text-[var(--chalk)]">🏆 Leaderboard</div>
+      <div className="fade-in-up glass-card flex flex-1 flex-col items-center justify-center gap-2 rounded-[22px] p-6 text-center">
+        <Trophy className="h-6 w-6 text-[var(--gold)]" strokeWidth={1.8} />
+        <div className="font-chalk text-2xl font-bold text-[var(--chalk)]">Leaderboard</div>
         <p className="text-xs text-[var(--chalk-dim)]">
-          No entries yet \u2014 sign in and finish a game to be the first!
+          No entries yet — sign in and finish a game to be the first!
         </p>
       </div>
     )
@@ -39,7 +41,7 @@ export function Leaderboard({ refreshKey }: LeaderboardProps) {
   return (
     <div className="fade-in-up glass-card flex flex-1 flex-col rounded-[22px] p-7">
       <div className="font-chalk mb-5 flex items-center gap-2 text-[22px] font-extrabold text-[var(--chalk)]">
-        🏆 Leaderboard
+        <Trophy className="h-5 w-5 text-[var(--gold)]" strokeWidth={2} /> Leaderboard
       </div>
       <ol className="flex flex-col divide-y divide-[var(--chalk)]/8">
         {entries.map((entry, i) => (
@@ -61,7 +63,7 @@ export function Leaderboard({ refreshKey }: LeaderboardProps) {
               </span>
             </span>
             <span className="flex items-center gap-1 font-mono font-bold text-[var(--gold)]">
-              {entry.bestStreak} 🔥
+              {entry.bestStreak} <Flame className="h-4 w-4" strokeWidth={2} fill="currentColor" />
             </span>
           </li>
         ))}

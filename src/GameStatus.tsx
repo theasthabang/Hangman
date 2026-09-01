@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { PartyPopper, Volume2, BookOpen } from "lucide-react"
 
 type GameStatusProps = {
   status: "won" | "lost"
@@ -37,8 +38,9 @@ export function GameStatus({ status, word, definition, example, onPlayAgain }: G
         aria-live="assertive"
         aria-label={isWon ? "You won" : "Game over"}
       >
-        <div className="font-chalk mb-1 text-3xl font-extrabold text-[var(--chalk)]">
-          {isWon ? "🎉 You Won!" : "Game Over"}
+        <div className="font-chalk mb-1 flex items-center justify-center gap-2 text-3xl font-extrabold text-[var(--chalk)]">
+          {isWon && <PartyPopper className="h-7 w-7 text-[var(--gold)]" strokeWidth={2} />}
+          {isWon ? "You Won!" : "Game Over"}
         </div>
         <div className="mb-1 mt-4 text-xs uppercase tracking-wide text-[var(--chalk-dim)]">
           The word was
@@ -55,7 +57,7 @@ export function GameStatus({ status, word, definition, example, onPlayAgain }: G
               title="Hear pronunciation"
               className="rounded-full p-1.5 text-[var(--gold)] transition-colors hover:bg-[var(--gold)]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
             >
-              🔊
+              <Volume2 className="h-4 w-4" strokeWidth={2} />
             </button>
           )}
         </div>
@@ -68,9 +70,9 @@ export function GameStatus({ status, word, definition, example, onPlayAgain }: G
             <button
               type="button"
               onClick={() => setMeaningRevealed(true)}
-              className="mb-6 w-full rounded-xl border border-[var(--chalk)]/15 bg-transparent px-4 py-2.5 text-sm font-semibold text-[var(--chalk-dim)] transition-all duration-200 hover:border-[var(--gold)]/40 hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
+              className="mb-6 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--chalk)]/15 bg-transparent px-4 py-2.5 text-sm font-semibold text-[var(--chalk-dim)] transition-all duration-200 hover:border-[var(--gold)]/40 hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
             >
-              📖 Show Meaning
+              <BookOpen className="h-4 w-4" strokeWidth={2} /> Show Meaning
             </button>
           ) : (
             <div className="fade-in-up mb-6 rounded-xl border border-[var(--gold)]/20 bg-[var(--board)]/70 p-5 text-left">
@@ -86,7 +88,7 @@ export function GameStatus({ status, word, definition, example, onPlayAgain }: G
                     title="Listen to definition and example"
                     className="rounded-full p-1 text-[var(--chalk-dim)] transition-colors hover:bg-[var(--gold)]/10 hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
                   >
-                    🔊
+                    <Volume2 className="h-4 w-4" strokeWidth={2} />
                   </button>
                 )}
               </div>

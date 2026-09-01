@@ -14,7 +14,10 @@ export function WordDisplay({ word, guessedLetters, reveal = false }: WordDispla
           return (
             <span
               key={i}
-              className="flex h-12 w-9 items-end justify-center border-b-2 border-[var(--gold)]/50 pb-1 shadow-[0_1px_10px_-2px_var(--gold)] sm:h-14 sm:w-11"
+              className={[
+                "flex h-12 w-9 items-end justify-center border-b-2 pb-1 transition-colors duration-200 sm:h-14 sm:w-11",
+                isGuessed ? "border-[var(--gold)]/70" : "border-[var(--chalk)]/15",
+              ].join(" ")}
             >
               <span
                 className={[

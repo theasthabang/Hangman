@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Play, Gamepad2, Trophy, Percent, Flame, Crown, type LucideIcon } from "lucide-react"
+import { Play, Gamepad2, Trophy, Percent, Flame, Crown, CheckCircle2, XCircle, PartyPopper, Target, Lightbulb, type LucideIcon } from "lucide-react"
 import { Header} from "./Header"
 import { DifficultySelector } from "./DifficultySelector"
 import { CategorySelector } from "./CategorySelector"
@@ -13,6 +13,7 @@ import { GameStatus } from "./GameStatus"
 import { Confetti } from "./Confetti"
 import { Toast, type ToastMessage } from "./Toast"
 import { Leaderboard } from "./Leaderboard"
+import { Achievements } from "./Achievements"
 import { UsernameEditor } from "./UsernameEditor"
 import { useHangman } from "./hooks/useHangman"
 import { HINTS_PER_GAME, MAX_INCORRECT_GUESSES } from "./utils/gameUtils"
@@ -36,9 +37,9 @@ function App() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevGuessCountRef = useRef(0)
 
-  const showToast = (text: string) => {
+  const showToast = (text: string, icon?: LucideIcon) => {
     const id = toastIdRef.current++
-    setToast({ id, text })
+    setToast({ id, text, icon })
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     toastTimerRef.current = setTimeout(() => setToast(null), TOAST_DURATION_MS)
   }
@@ -79,14 +80,20 @@ function App() {
     if (game.hintLetters.includes(lastLetter)) return
 
     if (game.currentWord?.word.includes(lastLetter)) {
-      showToast("✓ Great guess!")
+      showToast("Great guess!", CheckCircle2)
     } else {
-      showToast("✕ Wrong letter!")
+      showToast("Wrong letter!", XCircle)
     }
   }, [game.guessedLetters, game.currentWord, game.hintLetters])
 
   useEffect(() => {
-    if (game.status === "won") showToast("🎉 Amazing!")
+    if (game.status === "won") {
+      if (game.incorrectGuesses === 0) {
+        showToast("Perfect Game!", Target)
+      } else {
+        showToast("Amazing!", PartyPopper)
+      }
+    }
   }, [game.status])
 
   const winRate =
@@ -155,6 +162,8 @@ function App() {
                   </div>
                 </div>
               )}
+
+              {game.statsLoaded && <Achievements stats={game.stats} />}
             </div>
 
             <div className="flex h-full flex-col gap-4">
@@ -163,8 +172,8 @@ function App() {
               )}
               {!game.isSignedIn && !guestNudgeDismissed && (
                 <div className="glass-card fade-in-up flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--gold)]/15 text-base">
-                    🏆
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--gold)]/15">
+                    <Trophy className="h-4 w-4 text-[var(--gold)]" strokeWidth={2} />
                   </div>
                   <span className="flex-1 text-[var(--chalk-dim)]">
                     Sign in to save your streak and join the leaderboard
@@ -182,7 +191,7 @@ function App() {
                     aria-label="Dismiss"
                     className="shrink-0 text-[var(--chalk-mute)] transition-colors hover:text-[var(--chalk)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
                   >
-                    ✕
+                    <XCircle className="h-4 w-4" strokeWidth={2} />
                   </button>
                 </div>
               )}
@@ -194,8 +203,8 @@ function App() {
         {game.loading && <LoadingState />}
 
         {game.currentWord && !game.loading && (
-          <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-            <div className="flex flex-col gap-6">
+          <div className="grid gap-6 lg:grid-cols-[320px_1fr] lg:items-stretch">
+            <div className="flex h-full flex-col gap-6">
               <HangmanDrawing
                 incorrectGuesses={game.incorrectGuesses}
                 maxGuesses={MAX_INCORRECT_GUESSES}
@@ -219,7 +228,7 @@ function App() {
                 hintsTotal={HINTS_PER_GAME}
                 onUseHint={() => {
                   game.useHint()
-                  showToast("💡 Hint used")
+                  showToast("Hint used", Lightbulb)
                 }}
                 disabled={game.status !== "playing"}
               />
