@@ -5,44 +5,38 @@ type UsernameEditorProps = {
   onSave: (name: string) => void
 }
 
+// Once a display name is saved, there is deliberately NO way to
+// change it from this component — no "Change" button, no re-entry
+// into edit mode. One Clerk account = one permanent leaderboard name.
+// If displayName is already set, this always renders the read-only
+// view; the input form only ever appears for a brand-new account
+// that hasn't chosen a name yet.
 export function UsernameEditor({ displayName, onSave }: UsernameEditorProps) {
-  // Starts open automatically if no name is set yet, since a
-  // signed-in player with no display name would otherwise sync to
-  // the leaderboard as "Player" with no way to notice or fix it.
-  const [editing, setEditing] = useState(!displayName)
-  const [draft, setDraft] = useState(displayName)
+  const [draft, setDraft] = useState("")
 
   const submit = () => {
     const trimmed = draft.trim()
     if (!trimmed) return
     onSave(trimmed)
-    setEditing(false)
   }
 
-  if (!editing) {
+  if (displayName) {
     return (
       <div className="mb-4 flex items-center justify-between rounded-lg border border-[var(--chalk)]/12 bg-[var(--board-deep)]/60 px-3 py-2 text-sm">
         <span className="text-[var(--chalk-dim)]">
           Playing as <span className="font-semibold text-[var(--gold)]">{displayName}</span>
         </span>
-        <button
-          type="button"
-          onClick={() => {
-            setDraft(displayName)
-            setEditing(true)
-          }}
-          className="text-xs text-[var(--chalk-dim)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
-        >
-          Change
-        </button>
       </div>
     )
   }
 
   return (
     <div className="mb-4 rounded-lg border border-[var(--chalk)]/12 bg-[var(--board-deep)]/60 p-3">
-      <label htmlFor="display-name-input" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--chalk-dim)]">
-        Pick a leaderboard name
+      <label
+        htmlFor="display-name-input"
+        className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--chalk-dim)]"
+      >
+        Pick a leaderboard name — choose carefully, this can't be changed later
       </label>
       <div className="flex items-center gap-2">
         <input
@@ -67,7 +61,7 @@ export function UsernameEditor({ displayName, onSave }: UsernameEditorProps) {
         </button>
       </div>
       <p className="mt-2 text-xs text-[var(--chalk-dim)]">
-        This name is shown publicly on the leaderboard \u2014 never your email.
+        This name is shown publicly on the leaderboard — never your email. It's permanent once saved.
       </p>
     </div>
   )

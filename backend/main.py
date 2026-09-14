@@ -66,6 +66,15 @@ CORS(
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+if not GROQ_API_KEY:
+    # Not a hard crash — the app should still boot so /api/health works
+    # and you can see it's alive — but this makes the cause obvious in
+    # the Render logs immediately, instead of discovering it later via
+    # a confusing 500 on the first /api/generate-word call.
+    print("STARTUP WARNING: GROQ_API_KEY is not set. "
+          "Word generation will fail until it's configured in your "
+          "environment variables.")
+
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 GROQ_MODEL = "openai/gpt-oss-120b"
@@ -642,6 +651,24 @@ def validate_generated_word(
 
 def api_error(message: str, status_code: int):
     return jsonify({"error": message}), status_code
+
+
+# ============================================================
+# Global Safety Net
+# ============================================================
+# Every route above already handles its own known failure modes with
+# specific try/except blocks and clear error messages. This handler
+# exists purely as a last-resort backstop: if a future route (or an
+# edge case none of us thought of) raises something completely
+# unhandled, this catches it and returns a normal JSON 500 instead of
+# letting the worker process crash and take the whole app down with
+# it. It also guarantees the real traceback always lands in the
+# Render logs, so "backend seems down" always comes with a concrete
+# reason instead of a silent mystery.
+@app.errorhandler(Exception)
+def handle_unexpected_error(err):
+    print(f"UNHANDLED ERROR: {type(err).__name__}: {err}")
+    return api_error("Something went wrong on our end. Please try again.", 500)
 
 
 # ============================================================

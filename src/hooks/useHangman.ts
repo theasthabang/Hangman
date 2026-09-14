@@ -29,6 +29,44 @@ function scopedKey(base: string, userId: string | null | undefined): string {
   return userId ? `${base}:${userId}` : `${base}:guest`
 }
 
+// Loads a piece of account-scoped data, migrating it in from the
+// shared guest bucket the FIRST time this specific account is ever
+// seen on this browser.
+//
+// Why this is safe: it only ever reads/writes the account's OWN key
+// plus the guest key — never another account's key — so it can never
+// clobber a different signed-in user's real saved progress. It only
+// migrates when the account key has genuinely never been written
+// before (existing === null), so a returning user's real stats are
+// never replaced by stale guest data. And it deletes the guest key
+// immediately after migrating, so if a second, different person plays
+// as a guest on the same shared browser afterward, they start fresh
+// instead of inheriting (or re-triggering a migration of) progress
+// that already got claimed by the first account.
+function loadWithGuestMigration<T>(
+  accountKey: string,
+  guestKey: string,
+  fallback: T,
+  hasProgress: (value: T) => boolean
+): T {
+  // The guest bucket itself never migrates from anything — this guard
+  // just keeps the function correct if it's ever called for the guest
+  // key directly.
+  if (accountKey === guestKey) return loadJSON(accountKey, fallback)
+
+  const existing = loadJSON<T | null>(accountKey, null)
+  if (existing !== null) return existing
+
+  const guestValue = loadJSON<T | null>(guestKey, null)
+  if (guestValue !== null && hasProgress(guestValue)) {
+    saveJSON(accountKey, guestValue)
+    window.localStorage.removeItem(guestKey)
+    return guestValue
+  }
+
+  return fallback
+}
+
 export function useHangman() {
   // Clerk's hooks are safe to call here even though this is a custom
   // hook, not a component — React only cares that hooks are called
@@ -53,41 +91,64 @@ export function useHangman() {
   // "Loaded" is DERIVED fresh every render by comparing the key we
   // SHOULD be showing right now (statsKey, computed straight from the
   // current auth state) against the key whose data we last actually
-  // loaded (loadedStatsKey, a real state value). This is deliberately
-  // NOT a plain boolean flag set via setState — a boolean like that
-  // would lag one render behind an auth change (state updates from an
-  // effect only apply starting the NEXT render), creating a window
-  // where a "save" effect could see a stale "loaded=true" alongside
-  // stale data from the PREVIOUS user, and write it into the NEW
-  // user's storage key — silently overwriting their real saved
-  // progress. Deriving it fresh every render closes that window
-  // completely, since it flips to false in the very same render the
-  // auth context changes, before any other effect can act on stale
-  // data.
+  // loaded (statsState.key, part of the same state object as the data
+  // itself — see below for why it's bundled together). This is
+  // deliberately NOT a plain boolean flag set via setState — a boolean
+  // like that would lag one render behind an auth change (state
+  // updates from an effect only apply starting the NEXT render),
+  // creating a window where a "save" effect could see a stale
+  // "loaded=true" alongside stale data from the PREVIOUS user, and
+  // write it into the NEW user's storage key — silently overwriting
+  // their real saved progress. Deriving it fresh every render closes
+  // that window completely, since it flips to false in the very same
+  // render the auth context changes, before any other effect can act
+  // on stale data.
   const authKeySuffix = authLoaded ? user?.id ?? null : undefined
   const statsKey = authKeySuffix === undefined ? null : scopedKey("hangman:stats", authKeySuffix)
   const recentWordsKey =
     authKeySuffix === undefined ? null : scopedKey("hangman:recentWords", authKeySuffix)
 
-  const [stats, setStats] = useState<GameStats>(DEFAULT_STATS)
-  const [recentWords, setRecentWords] = useState<string[]>([])
-  const [loadedStatsKey, setLoadedStatsKey] = useState<string | null>(null)
-  const [loadedRecentWordsKey, setLoadedRecentWordsKey] = useState<string | null>(null)
+  // Bundled into one state object (value + the key it belongs to) so
+  // the load effect below only ever needs ONE setState call instead of
+  // two separate ones (previously setStats + setLoadedStatsKey). Same
+  // data, same guarantees — just one atomic update instead of two.
+  const [statsState, setStatsState] = useState<{ key: string | null; value: GameStats }>({
+    key: null,
+    value: DEFAULT_STATS,
+  })
+  const [recentWordsState, setRecentWordsState] = useState<{ key: string | null; value: string[] }>({
+    key: null,
+    value: [],
+  })
 
-  const statsLoaded = statsKey !== null && loadedStatsKey === statsKey
-  const recentWordsLoaded = recentWordsKey !== null && loadedRecentWordsKey === recentWordsKey
+  const stats = statsState.value
+  const recentWords = recentWordsState.value
+  const statsLoaded = statsKey !== null && statsState.key === statsKey
+  const recentWordsLoaded = recentWordsKey !== null && recentWordsState.key === recentWordsKey
 
   useEffect(() => {
-    if (!statsKey || statsKey === loadedStatsKey) return
-    setStats(loadJSON(statsKey, DEFAULT_STATS))
-    setLoadedStatsKey(statsKey)
-  }, [statsKey, loadedStatsKey])
+    if (!statsKey || statsKey === statsState.key) return
+    const guestStatsKey = scopedKey("hangman:stats", null)
+    const value = loadWithGuestMigration(
+      statsKey,
+      guestStatsKey,
+      DEFAULT_STATS,
+      s => s.gamesPlayed > 0
+    )
+    setStatsState({ key: statsKey, value })
+  }, [statsKey, statsState.key])
 
   useEffect(() => {
-    if (!recentWordsKey || recentWordsKey === loadedRecentWordsKey) return
-    setRecentWords(loadJSON<string[]>(recentWordsKey, []))
-    setLoadedRecentWordsKey(recentWordsKey)
-  }, [recentWordsKey, loadedRecentWordsKey])
+    if (!recentWordsKey || recentWordsKey === recentWordsState.key) return
+    const guestRecentWordsKey = scopedKey("hangman:recentWords", null)
+    const value = loadWithGuestMigration(
+      recentWordsKey,
+      guestRecentWordsKey,
+      [] as string[],
+      arr => arr.length > 0
+    )
+    setRecentWordsState({ key: recentWordsKey, value })
+  }, [recentWordsKey, recentWordsState.key])
 
   // A player-chosen leaderboard name, separate from their Clerk account
   // entirely — never their email. Scoped to THIS SPECIFIC user's Clerk
@@ -97,43 +158,57 @@ export function useHangman() {
   // "ask once, remembered forever for that account" flow, matching
   // how real apps handle it, instead of re-prompting or leaking
   // across accounts.
-  const [displayName, setDisplayNameState] = useState<string>("")
-  const [displayNameLoaded, setDisplayNameLoaded] = useState(false)
+  //
+  // name + loaded are bundled into one state object for the same
+  // reason as stats/recentWords above — one setState call per effect
+  // run instead of two.
+  const [displayNameState, setDisplayNameStateFull] = useState<{ name: string; loaded: boolean }>({
+    name: "",
+    loaded: false,
+  })
   const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0)
+
+  const displayName = displayNameState.name
+  const displayNameLoaded = displayNameState.loaded
 
   useEffect(() => {
     if (!authLoaded) return
     if (!user) {
-      // Reset to NOT-loaded (false), not true. If this were true here,
-      // a later sign-in by the same user would satisfy App.tsx's
-      // "isSignedIn && displayNameLoaded" gate on the very first render
-      // — before this effect has actually re-run to fetch their saved
-      // name — so UsernameEditor would mount with an empty name,
-      // permanently lock its "show the input" state (a useState
-      // initializer only runs once per mount), and never correct
-      // itself even after the real saved name loads a moment later.
-      // Keeping this false forces App.tsx to wait for the fetch below
-      // to finish before UsernameEditor is allowed to mount at all.
-      setDisplayNameState("")
-      setDisplayNameLoaded(false)
+      // Reset to NOT-loaded (loaded: false), not true. If this were
+      // true here, a later sign-in by the same user would satisfy
+      // App.tsx's "isSignedIn && displayNameLoaded" gate on the very
+      // first render — before this effect has actually re-run to
+      // fetch their saved name — so UsernameEditor would mount with
+      // an empty name, permanently lock its "show the input" state (a
+      // useState initializer only runs once per mount), and never
+      // correct itself even after the real saved name loads a moment
+      // later. Keeping this false forces App.tsx to wait for the
+      // fetch below to finish before UsernameEditor is allowed to
+      // mount at all.
+      setDisplayNameStateFull({ name: "", loaded: false })
       return
     }
-    setDisplayNameState(loadJSON(`hangman:displayName:${user.id}`, ""))
-    setDisplayNameLoaded(true)
+    setDisplayNameStateFull({ name: loadJSON(`hangman:displayName:${user.id}`, ""), loaded: true })
     // Depends on user.id specifically, not the whole user object —
     // Clerk can return a new object reference across renders even for
     // the same logged-in user, which would otherwise needlessly re-run
     // this (harmless, but no reason to).
   }, [authLoaded, user?.id])
 
+  // One account = one permanent leaderboard name. Guarded here too
+  // (not just in UsernameEditor.tsx) so this stays true no matter what
+  // calls setDisplayName — the UI is the first line of defense, this
+  // is the second. Once displayNameState.name is non-empty, this is a
+  // permanent no-op.
   const setDisplayName = useCallback(
     (name: string) => {
       if (!user) return
+      if (displayNameState.name) return
       const trimmed = name.trim().slice(0, 30)
-      setDisplayNameState(trimmed)
+      setDisplayNameStateFull(prev => ({ ...prev, name: trimmed }))
       saveJSON(`hangman:displayName:${user.id}`, trimmed)
     },
-    [user?.id]
+    [user?.id, displayNameState.name]
   )
 
   useEffect(() => {
@@ -190,7 +265,10 @@ export function useHangman() {
       try {
         const result = await generateWord(targetDifficulty, targetCategory, recentWords)
         setCurrentWord(result)
-        setRecentWords(prev => [result.word, ...prev].slice(0, MAX_RECENT_WORDS))
+        setRecentWordsState(prev => ({
+          ...prev,
+          value: [result.word, ...prev.value].slice(0, MAX_RECENT_WORDS),
+        }))
       } catch (err) {
         setError(
           err instanceof WordServiceError
@@ -205,14 +283,59 @@ export function useHangman() {
     [difficulty, category, recentWords]
   )
 
+  // Win/lose detection lives HERE, run directly off the letters that
+  // were just guessed — not in a useEffect reacting to guessedLetters
+  // changing a render later. This is the pattern React itself
+  // recommends ("you might not need an Effect"): a game finishing is a
+  // direct, synchronous consequence of the guess that just happened,
+  // not something to derive reactively after the fact. Shared by both
+  // guessLetter and useHint, since a hint-completed word should end
+  // the game exactly the same way a manual guess does.
+  const applyGuessedLetters = useCallback(
+    (nextGuessedLetters: string[]) => {
+      if (!currentWord) return
+      setGuessedLetters(nextGuessedLetters)
+
+      const isWon = currentWord.word.split("").every(letter => nextGuessedLetters.includes(letter))
+      const nextIncorrectGuesses = nextGuessedLetters.filter(
+        letter => !currentWord.word.includes(letter)
+      ).length
+      const isLost = !isWon && nextIncorrectGuesses >= MAX_INCORRECT_GUESSES
+
+      if (isWon) {
+        setStatus("won")
+        setStatsState(prev => {
+          const nextStreak = prev.value.currentStreak + 1
+          return {
+            ...prev,
+            value: {
+              gamesPlayed: prev.value.gamesPlayed + 1,
+              gamesWon: prev.value.gamesWon + 1,
+              currentStreak: nextStreak,
+              bestStreak: Math.max(prev.value.bestStreak, nextStreak),
+              perfectGames: prev.value.perfectGames + (nextIncorrectGuesses === 0 ? 1 : 0),
+            },
+          }
+        })
+      } else if (isLost) {
+        setStatus("lost")
+        setStatsState(prev => ({
+          ...prev,
+          value: { ...prev.value, gamesPlayed: prev.value.gamesPlayed + 1, currentStreak: 0 },
+        }))
+      }
+    },
+    [currentWord]
+  )
+
   const guessLetter = useCallback(
     (letter: string) => {
       if (!currentWord || status !== "playing") return
       const upper = letter.toUpperCase()
       if (guessedLetters.includes(upper)) return
-      setGuessedLetters(prev => [...prev, upper])
+      applyGuessedLetters([...guessedLetters, upper])
     },
-    [currentWord, status, guessedLetters]
+    [currentWord, status, guessedLetters, applyGuessedLetters]
   )
 
   const useHint = useCallback(() => {
@@ -220,35 +343,10 @@ export function useHangman() {
     const remaining = currentWord.word.split("").filter(l => !guessedLetters.includes(l))
     if (remaining.length === 0) return
     const letter = remaining[Math.floor(Math.random() * remaining.length)]
-    setGuessedLetters(prev => [...prev, letter])
     setHintLetters(prev => [...prev, letter])
     setHintsUsed(n => n + 1)
-  }, [currentWord, status, hintsUsed, guessedLetters])
-
-  // win/lose detection — runs locally, no AI call involved
-  useEffect(() => {
-    if (!currentWord || status !== "playing") return
-
-    const isWon = currentWord.word.split("").every(letter => guessedLetters.includes(letter))
-    const isLost = incorrectGuesses >= MAX_INCORRECT_GUESSES
-
-    if (isWon) {
-      setStatus("won")
-      setStats(prev => {
-        const nextStreak = prev.currentStreak + 1
-        return {
-          gamesPlayed: prev.gamesPlayed + 1,
-          gamesWon: prev.gamesWon + 1,
-          currentStreak: nextStreak,
-          bestStreak: Math.max(prev.bestStreak, nextStreak),
-          perfectGames: prev.perfectGames + (incorrectGuesses === 0 ? 1 : 0),
-        }
-      })
-    } else if (isLost) {
-      setStatus("lost")
-      setStats(prev => ({ ...prev, gamesPlayed: prev.gamesPlayed + 1, currentStreak: 0 }))
-    }
-  }, [guessedLetters, currentWord, status, incorrectGuesses])
+    applyGuessedLetters([...guessedLetters, letter])
+  }, [currentWord, status, hintsUsed, guessedLetters, applyGuessedLetters])
 
   return {
     difficulty,
