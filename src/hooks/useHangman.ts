@@ -398,4 +398,4 @@ export function useHangman() {
     setDifficulty,
     setCategory,
   }
-}s
+}
