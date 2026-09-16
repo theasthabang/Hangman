@@ -126,8 +126,18 @@ export function useHangman() {
   const statsLoaded = statsKey !== null && statsState.key === statsKey
   const recentWordsLoaded = recentWordsKey !== null && recentWordsState.key === recentWordsKey
 
-  useEffect(() => {
-    if (!statsKey || statsKey === statsState.key) return
+  // NOT a useEffect. loadJSON() reads localStorage synchronously — no
+  // async wait, no subscription to an external event. That means this
+  // isn't "synchronizing with an external system" (the case effects
+  // exist for) — it's a plain derived-value reset when statsKey
+  // changes, which React explicitly documents as safe to do with a
+  // conditional setState call directly in the render body ("Adjusting
+  // some state when a prop changes" on react.dev). React detects the
+  // state change and re-renders immediately before committing
+  // anything to the screen — no extra effect-triggered render pass,
+  // and (correctly) no set-state-in-effect warning, since this rule
+  // only scans inside useEffect callbacks.
+  if (statsKey && statsKey !== statsState.key) {
     const guestStatsKey = scopedKey("hangman:stats", null)
     const value = loadWithGuestMigration(
       statsKey,
@@ -136,10 +146,9 @@ export function useHangman() {
       s => s.gamesPlayed > 0
     )
     setStatsState({ key: statsKey, value })
-  }, [statsKey, statsState.key])
+  }
 
-  useEffect(() => {
-    if (!recentWordsKey || recentWordsKey === recentWordsState.key) return
+  if (recentWordsKey && recentWordsKey !== recentWordsState.key) {
     const guestRecentWordsKey = scopedKey("hangman:recentWords", null)
     const value = loadWithGuestMigration(
       recentWordsKey,
@@ -148,7 +157,7 @@ export function useHangman() {
       arr => arr.length > 0
     )
     setRecentWordsState({ key: recentWordsKey, value })
-  }, [recentWordsKey, recentWordsState.key])
+  }
 
   // A player-chosen leaderboard name, separate from their Clerk account
   // entirely — never their email. Scoped to THIS SPECIFIC user's Clerk
@@ -162,38 +171,52 @@ export function useHangman() {
   // name + loaded are bundled into one state object for the same
   // reason as stats/recentWords above — one setState call per effect
   // run instead of two.
-  const [displayNameState, setDisplayNameStateFull] = useState<{ name: string; loaded: boolean }>({
+  // "__unset__" is a sentinel meaning "haven't checked yet for any
+  // auth state" — distinct from both `null` (checked, and confirmed
+  // signed-out) and any real Clerk user id, so the very first render
+  // always triggers the initial load below.
+  const NOT_YET_CHECKED = "__unset__"
+
+  const [displayNameState, setDisplayNameStateFull] = useState<{
+    name: string
+    loaded: boolean
+    checkedFor: string | null
+  }>({
     name: "",
     loaded: false,
+    checkedFor: NOT_YET_CHECKED,
   })
   const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0)
 
   const displayName = displayNameState.name
   const displayNameLoaded = displayNameState.loaded
 
-  useEffect(() => {
-    if (!authLoaded) return
-    if (!user) {
+  // Same reasoning as the stats/recentWords blocks above: loadJSON()
+  // is a synchronous localStorage read, so this is a derived-value
+  // reset on auth change, not a "synchronize with an external system"
+  // effect — a conditional setState in the render body is the correct
+  // (and lint-clean) tool here, not useEffect.
+  if (authKeySuffix !== undefined && authKeySuffix !== displayNameState.checkedFor) {
+    if (authKeySuffix === null) {
       // Reset to NOT-loaded (loaded: false), not true. If this were
       // true here, a later sign-in by the same user would satisfy
       // App.tsx's "isSignedIn && displayNameLoaded" gate on the very
-      // first render — before this effect has actually re-run to
-      // fetch their saved name — so UsernameEditor would mount with
-      // an empty name, permanently lock its "show the input" state (a
-      // useState initializer only runs once per mount), and never
-      // correct itself even after the real saved name loads a moment
-      // later. Keeping this false forces App.tsx to wait for the
-      // fetch below to finish before UsernameEditor is allowed to
-      // mount at all.
-      setDisplayNameStateFull({ name: "", loaded: false })
-      return
+      // first render — before the real name has actually been fetched
+      // — so UsernameEditor would mount with an empty name,
+      // permanently lock its "show the input" state (a useState
+      // initializer only runs once per mount), and never correct
+      // itself even after the real saved name loads a moment later.
+      // Keeping this false forces App.tsx to wait for the fetch below
+      // to finish before UsernameEditor is allowed to mount at all.
+      setDisplayNameStateFull({ name: "", loaded: false, checkedFor: null })
+    } else {
+      setDisplayNameStateFull({
+        name: loadJSON(`hangman:displayName:${authKeySuffix}`, ""),
+        loaded: true,
+        checkedFor: authKeySuffix,
+      })
     }
-    setDisplayNameStateFull({ name: loadJSON(`hangman:displayName:${user.id}`, ""), loaded: true })
-    // Depends on user.id specifically, not the whole user object —
-    // Clerk can return a new object reference across renders even for
-    // the same logged-in user, which would otherwise needlessly re-run
-    // this (harmless, but no reason to).
-  }, [authLoaded, user?.id])
+  }
 
   // One account = one permanent leaderboard name. Guarded here too
   // (not just in UsernameEditor.tsx) so this stays true no matter what
@@ -375,4 +398,4 @@ export function useHangman() {
     setDifficulty,
     setCategory,
   }
-}
+}s
